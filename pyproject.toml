@@ -19,8 +19,9 @@ name = "ground-up-ml"
 version = "0.1.0"
 description = "A hands-on machine learning reboot from first principles to production-ready code. Compare pure Python, scikit-learn, and PyTorch implementations side-by-side as you build intuition and expertise from the ground up."
 authors = [
-    {name = "Will Thurston"}
+    {name = "Will Thurston "}
 ]
+package-mode = false
 license = {text = "MIT"}
 readme = "README.md"
 requires-python = ">=3.12"
