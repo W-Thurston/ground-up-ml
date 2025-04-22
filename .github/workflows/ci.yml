@@ -24,7 +24,7 @@ jobs:
 
     - name: 📦 Install dependencies
       run: |
-        poetry install
+        poetry install --no-root
         python -m pip install --upgrade pip
 
     - name: 🧪 Run tests
