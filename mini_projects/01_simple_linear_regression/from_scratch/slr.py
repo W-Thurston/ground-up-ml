@@ -20,7 +20,11 @@ class SimpleLinearRegression:
     def __init__(self, x: pd.Series, y: pd.Series):
         self.x = x.to_numpy()
         self.y = y.to_numpy()
+
+        # Method to calculate coefficient estimations
         self.method = ""
+
+        # Coefficient Estimations
         self.beta_0_hat = None
         self.beta_1_hat = None
 
@@ -28,9 +32,20 @@ class SimpleLinearRegression:
         self.rmse = None
         self.mae = None
         self.r_squared = None
+
         self.diagnostics = {}
 
-    def fit(self, method: str = None):
+    def fit(self, method: str = None) -> None:
+        """
+        Routing function to call specific coefficient estimator methods
+
+        Args:
+            method (str, optional): Method to calculate coefficients.
+                Defaults to None.
+
+        Raises:
+            ValueError: Raise error if value in 'method' is not a known one.
+        """
         self.method = method
 
         fit_methods = {
@@ -41,10 +56,12 @@ class SimpleLinearRegression:
             "gradient_descent_mini_batch": self._fit_gradient_descent_mini_batch,
         }
 
+        # Raise error if value in 'method' is not a known one
         if method not in fit_methods:
             raise ValueError(f"Unknown method '{method}' for SimpleLinearRegression.")
 
-        fit_methods[method]()  # Run the appropriate method
+        # Call respective coefficient estimator
+        fit_methods[method]()
 
     def _fit_beta_estimations(self):
         """
@@ -249,17 +266,21 @@ class SimpleLinearRegression:
     def fitted(self):
         return self.predict()
 
+    @staticmethod
     def _calculate_rmse(self, y_actual, y_pred):
         return np.sqrt(np.mean((y_actual - y_pred) ** 2))
 
+    @staticmethod
     def _calculate_mae(self, y_actual, y_pred):
         return np.mean(np.abs(y_actual - y_pred))
 
+    @staticmethod
     def _calculate_r_squared(self, y_actual, y_pred):
         return 1 - np.sum((y_actual - y_pred) ** 2) / np.sum(
             (y_actual - np.mean(y_actual)) ** 2
         )
 
+    @staticmethod
     def _format_duration(self, seconds: float) -> str:
         if seconds < 1e-3:
             return f"{seconds * 1e6:.2f}µs"
