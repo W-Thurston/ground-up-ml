@@ -11,8 +11,8 @@ import pandas as pd
 class SimpleLinearRegression:
     ALL_METHODS = [
         "beta_estimations",
+        "normal_equation",
     ]
-    #     "normal_equation",
     #     "gradient_descent_batch",
     #     "gradient_descent_stochastic",
     #     "gradient_descent_mini_batch"
@@ -63,7 +63,17 @@ class SimpleLinearRegression:
         )
         self.beta_0_hat = y_bar - self.beta_1_hat * x_bar
 
-    def _fit_normal_equation(self): ...
+    def _fit_normal_equation(self):
+        """
+        Theta_hat = ((X.T ⋅ X)^-1) ⋅ X.T ⋅ y
+        """
+
+        X_b = np.c_[np.ones((self.x.shape[0],1)), self.x] # add x0 = 1 to each observation
+        theta_hat = np.linalg.pinv(X_b.T @ X_b) @ X_b.T @ self.y
+
+        self.beta_0_hat = theta_hat[0]
+        self.beta_1_hat = theta_hat[1]
+
     def _fit_gradient_descent_batch(self): ...
     def _fit_gradient_descent_stochastic(self): ...
     def _fit_gradient_descent_mini_batch(self): ...
@@ -126,9 +136,9 @@ class SimpleLinearRegression:
                 #   predicted values and the actual
                 # R_squared:
                 """
-                self.rmse = self._calculate_rmse(y, y_hat)
-                self.mae = self._calculate_mae(y, y_hat)
-                self.r_squared = self._calculate_r_squared(y, y_hat)
+                model.rmse = self._calculate_rmse(y, y_hat)
+                model.mae = self._calculate_mae(y, y_hat)
+                model.r_squared = self._calculate_r_squared(y, y_hat)
 
                 # MLflow logging
                 # with start_run(run_name=f"{method}_{n}_samples"):
@@ -145,9 +155,9 @@ class SimpleLinearRegression:
                     {
                         "n_samples": n,
                         "method": method,
-                        "rmse": self.rmse,
-                        "mae": self.mae,
-                        "r_squared": self.r_squared,
+                        "rmse": model.rmse,
+                        "mae": model.mae,
+                        "r_squared": model.r_squared,
                         "beta_0": model.beta_0_hat,
                         "beta_1": model.beta_1_hat,
                         "duration_seconds": duration,
@@ -196,17 +206,26 @@ class SimpleLinearRegression:
         print(f"Method: {self.method}")
         print(f"Intercept (β₀): {self.beta_0_hat}")
         print(f"Slope (β₁): {self.beta_1_hat}")
+        print()
 
     def benchmark_summary(self):
         df = self.simulate()
         print(df)
+        print()
         return df
 
 
 if __name__ == "__main__":
-    model = SimpleLinearRegression(pd.Series([1, 2, 3]), pd.Series([1, 2, 3]))
+    x_test = pd.Series([1, 2, 3])
+    y_test = pd.Series([1, 2, 3])
 
-    model.benchmark_summary()
-    print()
-    model.fit("beta_estimations")
-    model.summary()
+    benchmark_model = SimpleLinearRegression(x_test, y_test)
+    benchmark_model.benchmark_summary()
+
+    model_beta = SimpleLinearRegression(x_test, y_test)
+    model_beta.fit("beta_estimations")
+    model_beta.summary()
+
+    model_normal = SimpleLinearRegression(x_test, y_test)
+    model_normal.fit("normal_equation")
+    model_normal.summary()
