@@ -12,11 +12,10 @@ class SimpleLinearRegression:
     ALL_METHODS = [
         "beta_estimations",
         "normal_equation",
+        "gradient_descent_batch",
+        "gradient_descent_stochastic",
+        "gradient_descent_mini_batch",
     ]
-    #     "gradient_descent_batch",
-    #     "gradient_descent_stochastic",
-    #     "gradient_descent_mini_batch"
-    # ]
 
     def __init__(self, x: pd.Series, y: pd.Series):
         self.x = x.to_numpy()
@@ -29,30 +28,32 @@ class SimpleLinearRegression:
         self.rmse = None
         self.mae = None
         self.r_squared = None
+        self.diagnostics = {}
 
     def fit(self, method: str = None):
         self.method = method
 
-        if method == "beta_estimations":
-            self._fit_beta_estimations()
-        elif self.method == "normal_equation":
-            self._fit_normal_equation()
-        elif self.method == "gradient_descent_batch":
-            self._fit_gradient_descent_batch()
-        elif self.method == "gradient_descent_stochastic":
-            self._fit_gradient_descent_stochastic()
-        elif self.method == "gradient_descent_mini_batch":
-            self._fit_gradient_descent_mini_batch()
-        else:
-            raise ValueError(
-                f"Unknown method '{self.method}' for SimpleLinearRegression."
-            )
+        fit_methods = {
+            "beta_estimations": self._fit_beta_estimations,
+            "normal_equation": self._fit_normal_equation,
+            "gradient_descent_batch": self._fit_gradient_descent_batch,
+            "gradient_descent_stochastic": self._fit_gradient_descent_stochastic,
+            "gradient_descent_mini_batch": self._fit_gradient_descent_mini_batch,
+        }
+
+        if method not in fit_methods:
+            raise ValueError(f"Unknown method '{method}' for SimpleLinearRegression.")
+
+        fit_methods[method]()  # Run the appropriate method
 
     def _fit_beta_estimations(self):
         """
+        Fits the model using Beta estimations
+
         β_1_hat = (∑(x_i - x_bar)*(y_i - y_bar)) / ∑(x_i - x_bar)^2
         β_0_hat = y_bar - β_1_hat * x
         """
+
         # Intitialize feature and target means
         x_bar = np.mean(self.x)
         y_bar = np.mean(self.y)
@@ -63,20 +64,179 @@ class SimpleLinearRegression:
         )
         self.beta_0_hat = y_bar - self.beta_1_hat * x_bar
 
+        self.diagnostics = {}  # No dynamics for closed-form method
+
     def _fit_normal_equation(self):
         """
+        Fits the model using the Normal Equation
+
         Theta_hat = ((X.T ⋅ X)^-1) ⋅ X.T ⋅ y
         """
 
-        X_b = np.c_[np.ones((self.x.shape[0],1)), self.x] # add x0 = 1 to each observation
+        # Add intercept column
+        X_b = np.c_[np.ones((self.x.shape[0], 1)), self.x]
         theta_hat = np.linalg.pinv(X_b.T @ X_b) @ X_b.T @ self.y
 
         self.beta_0_hat = theta_hat[0]
         self.beta_1_hat = theta_hat[1]
 
-    def _fit_gradient_descent_batch(self): ...
-    def _fit_gradient_descent_stochastic(self): ...
-    def _fit_gradient_descent_mini_batch(self): ...
+        self.diagnostics = {}  # No dynamics for closed-form method
+
+    def _fit_gradient_descent_batch(self):
+        """
+        Fits the model using batch gradient descent.
+        Minimizes the MSE cost function by iteratively updating θ.
+
+        Gradient: ∂/∂θ J(θ) = 2/m * Xᵀ(Xθ - y)
+        """
+
+        # Add intercept column
+        X_b = np.c_[np.ones((self.x.shape[0], 1)), self.x]  # shape (m, 2)
+        y = self.y.reshape(-1, 1)  # ensure shape (m, 1)
+        m = self.x.shape[0]
+
+        eta_0 = 0.1  # Initial learning rate
+        decay_rate = 0.01  # Controls how fast learning rate decreases
+        n_iterations = 1000
+        tolerance = 1e-6
+
+        # Initialize parameters randomly
+        theta_hat = np.random.randn(2, 1) * 0.01
+        prev_theta = theta_hat.copy()
+
+        cost_history = []
+
+        for iteration in range(n_iterations):
+            eta_t = eta_0 / (1 + decay_rate * iteration)  # learning rate decay
+            gradients = (2 / m) * X_b.T @ ((X_b @ theta_hat) - y)
+            theta_hat -= eta_t * gradients
+
+            cost = np.mean((X_b @ theta_hat - y) ** 2)
+            cost_history.append(cost)
+
+            # Convergence check
+            if np.linalg.norm(theta_hat - prev_theta) < tolerance:
+                print(f"[✔] Converged at iteration {iteration}")
+                break
+            prev_theta = theta_hat.copy()
+
+        # Unpack final parameters
+        self.beta_0_hat = theta_hat[0, 0]
+        self.beta_1_hat = theta_hat[1, 0]
+
+        self.diagnostics = {"cost_history": cost_history}
+
+    def _fit_gradient_descent_stochastic(
+        self, t0=5, t1=50, n_epochs=50, tolerance=1e-6
+    ):
+        """
+        Fits the model using stochastic gradient descent (SGD) with a
+        decaying learning rate.
+
+        Parameters are updated after each training example, using one
+        randomly shuffled sample per step.
+        """
+
+        # Add intercept column
+        X_b = np.c_[np.ones((self.x.shape[0], 1)), self.x]
+        y = self.y.reshape(-1, 1)
+        m = self.x.shape[0]
+
+        theta_hat = np.random.randn(2, 1) * 0.01
+        t = 0
+        cost_history = []
+
+        def learning_schedule(t):
+            return t0 / (t + t1)
+
+        for epoch in range(n_epochs):
+            indices = np.random.permutation(m)
+            for i in indices:
+                xi = X_b[i : i + 1]
+                yi = y[i : i + 1]
+                gradients = 2 * xi.T @ ((xi @ theta_hat) - yi)
+                eta = learning_schedule(t)
+                update = eta * gradients
+                theta_hat -= update
+
+                cost = np.mean((X_b @ theta_hat - y) ** 2)
+                cost_history.append(cost)
+
+                # Convergence check
+                if np.linalg.norm(update) < tolerance:
+                    print(f"[✔] SGD converged at epoch {epoch}, sample {i}, t={t}")
+                    break
+                t += 1  # count each update step
+
+        # Unpack final parameters
+        self.beta_0_hat = theta_hat[0, 0]
+        self.beta_1_hat = theta_hat[1, 0]
+
+        self.diagnostics = {"cost_history": cost_history}
+
+    def _fit_gradient_descent_mini_batch(
+        self,
+        batch_size=16,
+        eta_0=0.1,
+        decay_rate=0.01,
+        n_epochs=50,
+        tolerance=1e-6,
+    ):
+        """
+        Fits the model using mini-batch gradient descent with a decaying learning rate.
+        Each epoch processes randomly shuffled mini-batches of the training data.
+
+        Args:
+            batch_size (int, optional): Number of samples per mini-batch.
+                Defaults to 16.
+            eta_0 (float, optional): Initial learning rate.
+                Defaults to 0.1.
+            decay_rate (float, optional): Controls how quickly eta decays.
+                Defaults to 0.01.
+            n_epochs (int, optional): Number of passes through the data.
+                Defaults to 50.
+            tolerance (_type_, optional): Threshold for stopping based on
+                parameter stability. Defaults to 1e-6.
+        """
+
+        # Add intercept column
+        X_b = np.c_[np.ones((self.x.shape[0], 1)), self.x]
+        y = self.y.reshape(-1, 1)
+        m = self.x.shape[0]
+
+        theta_hat = np.random.randn(2, 1) * 0.01
+        t = 0
+        cost_history = []
+
+        for epoch in range(n_epochs):
+            indices = np.random.permutation(m)
+            X_b_shuffled, y_shuffled = X_b[indices], y[indices]
+
+            for i in range(0, m, batch_size):
+                X_mini = X_b_shuffled[i : i + batch_size]
+                y_mini = y_shuffled[i : i + batch_size]
+
+                gradients = (2 / len(X_mini)) * X_mini.T @ (X_mini @ theta_hat - y_mini)
+                eta_t = eta_0 / (1 + decay_rate * t)
+                update = eta_t * gradients
+                theta_hat -= update
+
+                cost = np.mean((X_b @ theta_hat - y) ** 2)
+                cost_history.append(cost)
+
+                if np.linalg.norm(update) < tolerance:
+                    print(
+                        f"[✔] Mini-batch GD converged at epoch {epoch}, "
+                        f"batch {i // batch_size}, t={t}"
+                    )
+                    break
+                t += 1
+
+        # Unpack final parameters
+        self.beta_0_hat = theta_hat[0, 0]
+        self.beta_1_hat = theta_hat[1, 0]
+
+        self.diagnostics = {"cost_history": cost_history}
 
     def predict(self, x_new: pd.Series = None):
         if x_new is None:
@@ -229,3 +389,15 @@ if __name__ == "__main__":
     model_normal = SimpleLinearRegression(x_test, y_test)
     model_normal.fit("normal_equation")
     model_normal.summary()
+
+    model_gd_batch = SimpleLinearRegression(x_test, y_test)
+    model_gd_batch.fit("gradient_descent_batch")
+    model_gd_batch.summary()
+
+    model_gd_stochastic = SimpleLinearRegression(x_test, y_test)
+    model_gd_stochastic.fit("gradient_descent_stochastic")
+    model_gd_stochastic.summary()
+
+    model_gd_mini_batch = SimpleLinearRegression(x_test, y_test)
+    model_gd_mini_batch.fit("gradient_descent_mini_batch")
+    model_gd_mini_batch.summary()

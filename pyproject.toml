@@ -5,6 +5,7 @@ line-length = 88
 [tool.isort]
 profile = "black"
 
+
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.3.5"
 black = "^25.1.0"
