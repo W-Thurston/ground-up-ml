@@ -1,5 +1,29 @@
 # Changelog
 
+## [v0.3.0] — _Full Gradient Descent Implementation + Linting Cleanup_
+
+**Release Date:** 2025-04-23
+
+### ✨ Features
+
+- ✅ **Implemented all gradient descent variants**:
+  - `gradient_descent_batch` with decaying learning rate and convergence check
+  - `gradient_descent_stochastic` with per-sample updates and shuffling per epoch
+  - `gradient_descent_mini_batch` with tunable batch size and dynamic decay
+- ✅ Added consistent **cost tracking (`cost_history`)** across all gradient descent methods to support robust visual diagnostics in future releases
+- ✅ Each `_fit_*` method now standardizes outputs via `self.diagnostics` for plotting and analysis
+
+### 🧼 Code & Dev Tooling
+
+- ✅ Resolved conflicts between `black` and `flake8` (E203) by configuring a `.flake8` file
+- ✅ Updated `pyproject.toml` and unified project style settings across all tools
+- ✅ Pre-commit hooks now run cleanly with proper config resolution
+
+### 🧪 Internal Enhancements
+
+- Refactored logic and docstrings for readability, consistency, and extensibility
+- Updated benchmark runner to consistently handle all methods via `ALL_METHODS`
+
 ## [v0.2.0] — _Adds Normal Equation and Benchmarking Enhancements_
 
 **Release Date:** 2025-04-23
