@@ -1,5 +1,43 @@
 # Changelog
 
+## 📦 [v0.4.0] — _Simple Linear Regression: Multi-Implementation Benchmarking_
+
+**Release Date:** 2025-04-25
+
+### ✨ Features Completed
+
+- ✅ **From-Scratch Simple Linear Regression**:
+  - Beta Estimations (ISLR-style)
+  - Normal Equation (Matrix pseudo-inverse)
+  - Batch, Stochastic, and Mini-Batch Gradient Descent
+- ✅ **Scikit-Learn Simple Linear Regression**:
+  - Normal Equation (`LinearRegression`)
+  - Batch, Stochastic, and Mini-Batch (`SGDRegressor`)
+- ✅ **PyTorch Simple Linear Regression**:
+  - Beta Estimations
+  - Normal Equation
+  - Batch, Stochastic, and Mini-Batch Gradient Descent
+- ✅ Unified `.fit()`, `.predict()`, `.simulate()`, and `.benchmark_summary()` API across all implementations
+- ✅ Cost History (`loss vs. epochs`) tracked and logged consistently
+- ✅ Diagnostics (RMSE, MAE, R²) standardized
+- ✅ Visualization-ready with unified plotting API
+- ✅ Safe tensor extraction (`.detach().cpu().item()`) in PyTorch implementation
+- ✅ Shared utility modules (`metrics.py`, `utils.py`, `visualizations.py`) for clean architecture
+
+### 🛠️ Internal Improvements
+
+- Modular, extensible codebase structure
+- Ready for expansion into multivariate linear regression
+- Ready for benchmarking and cross-model comparisons
+
+---
+
+### 🏁 Summary
+
+> **All planned Simple Linear Regression methods across FromScratch, Sklearn, and PyTorch are now fully implemented, benchmark-ready, and extensible.**
+
+---
+
 ## [v0.3.0] — _Full Gradient Descent Implementation + Linting Cleanup_
 
 **Release Date:** 2025-04-23

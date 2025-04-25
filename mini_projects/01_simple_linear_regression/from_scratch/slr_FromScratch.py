@@ -1,14 +1,33 @@
-# slr.py placeholder
+# mini_project/01_simple_linear_regression/from_scratch/slr_FromScratch.py
+"""
+Implements Simple Linear Regression using from-scratch math and logic.
+
+Supports:
+- beta_estimations (ISLR)
+- normal_equation (matrix inverse)
+- batch, stochastic, mini-batch gradient descent
+"""
 
 import time
+from typing import Optional
 
 import numpy as np
 import pandas as pd
 
+from shared_utils.metrics import calculate_mae, calculate_r_squared, calculate_rmse
+from shared_utils.utils import format_duration
+from shared_utils.visualizations import plot_model_diagnostics
+
 # from shared_utils.mlflow_logger import log_metrics, log_params, start_run
 
 
-class SimpleLinearRegression:
+class SimpleLinearRegressionFromScratch:
+    """
+    A Python implementation of Simple Linear Regression.
+    The interface of SimpleLinearRegressionFromScratch matches
+    SimpleLinearRegressionSklearn and SimpleLinearRegressionPyTorch.
+    """
+
     ALL_METHODS = [
         "beta_estimations",
         "normal_equation",
@@ -18,20 +37,20 @@ class SimpleLinearRegression:
     ]
 
     def __init__(self, x: pd.Series, y: pd.Series):
-        self.x = x.to_numpy()
-        self.y = y.to_numpy()
+        self.x: np.ndarray = x.to_numpy()
+        self.y: np.ndarray = y.to_numpy()
 
         # Method to calculate coefficient estimations
-        self.method = ""
+        self.method: str = ""
 
         # Coefficient Estimations
-        self.beta_0_hat = None
-        self.beta_1_hat = None
+        self.beta_0_hat: Optional[float] = None
+        self.beta_1_hat: Optional[float] = None
 
         # Performance metrics
-        self.rmse = None
-        self.mae = None
-        self.r_squared = None
+        self.rmse: Optional[float] = None
+        self.mae: Optional[float] = None
+        self.r_squared: Optional[float] = None
 
         self.diagnostics = {}
 
@@ -58,17 +77,19 @@ class SimpleLinearRegression:
 
         # Raise error if value in 'method' is not a known one
         if method not in fit_methods:
-            raise ValueError(f"Unknown method '{method}' for SimpleLinearRegression.")
+            raise ValueError(
+                f"Unknown method '{method}' for SimpleLinearRegressionFromScratch."
+            )
 
         # Call respective coefficient estimator
         fit_methods[method]()
 
-    def _fit_beta_estimations(self):
+    def _fit_beta_estimations(self) -> None:
         """
-        Fits the model using Beta estimations
+        Fits the model using Beta estimations:
+            β_1_hat = (∑(x_i - x_bar)*(y_i - y_bar)) / ∑(x_i - x_bar)^2
+            β_0_hat = y_bar - β_1_hat * x
 
-        β_1_hat = (∑(x_i - x_bar)*(y_i - y_bar)) / ∑(x_i - x_bar)^2
-        β_0_hat = y_bar - β_1_hat * x
         """
 
         # Intitialize feature and target means
@@ -85,32 +106,35 @@ class SimpleLinearRegression:
 
     def _fit_normal_equation(self):
         """
-        Fits the model using the Normal Equation
+        Fits the model using the Normal Equation:
+            Theta_hat = ((X.T ⋅ X)^-1) ⋅ X.T ⋅ y
 
-        Theta_hat = ((X.T ⋅ X)^-1) ⋅ X.T ⋅ y
         """
 
         # Add intercept column
         X_b = np.c_[np.ones((self.x.shape[0], 1)), self.x]
-        theta_hat = np.linalg.pinv(X_b.T @ X_b) @ X_b.T @ self.y
 
+        # Normal Equation calculation
+        theta_hat = np.linalg.pinv(X_b.T @ X_b) @ (X_b.T @ self.y)
+
+        # Unpack final parameters
         self.beta_0_hat = theta_hat[0]
         self.beta_1_hat = theta_hat[1]
 
         self.diagnostics = {}  # No dynamics for closed-form method
 
-    def _fit_gradient_descent_batch(self):
+    def _fit_gradient_descent_batch(self) -> None:
         """
         Fits the model using batch gradient descent.
-        Minimizes the MSE cost function by iteratively updating θ.
+        Minimizes the MSE cost function by iteratively updating θ (theta).
 
         Gradient: ∂/∂θ J(θ) = 2/m * Xᵀ(Xθ - y)
         """
 
         # Add intercept column
-        X_b = np.c_[np.ones((self.x.shape[0], 1)), self.x]  # shape (m, 2)
-        y = self.y.reshape(-1, 1)  # ensure shape (m, 1)
         m = self.x.shape[0]
+        X_b = np.c_[np.ones((m, 1)), self.x]
+        y = self.y.reshape(-1, 1)  # ensure shape (m, 1)
 
         eta_0 = 0.1  # Initial learning rate
         decay_rate = 0.01  # Controls how fast learning rate decreases
@@ -124,10 +148,19 @@ class SimpleLinearRegression:
         cost_history = []
 
         for iteration in range(n_iterations):
-            eta_t = eta_0 / (1 + decay_rate * iteration)  # learning rate decay
-            gradients = (2 / m) * X_b.T @ ((X_b @ theta_hat) - y)
-            theta_hat -= eta_t * gradients
+            # Learning rate decay
+            eta_t = eta_0 / (1 + decay_rate * iteration)
 
+            # Calculate gradient
+            gradients = (2 / m) * X_b.T @ ((X_b @ theta_hat) - y)
+
+            # Home much to update theta_hat by
+            update = eta_t * gradients
+
+            # Update theta_hat
+            theta_hat -= update
+
+            # Keep track of our 'cost'. We are aiming to minimize this
             cost = np.mean((X_b @ theta_hat - y) ** 2)
             cost_history.append(cost)
 
@@ -135,6 +168,8 @@ class SimpleLinearRegression:
             if np.linalg.norm(theta_hat - prev_theta) < tolerance:
                 print(f"[✔] Converged at iteration {iteration}")
                 break
+
+            # Update previous theta for convergence checks
             prev_theta = theta_hat.copy()
 
         # Unpack final parameters
@@ -144,21 +179,29 @@ class SimpleLinearRegression:
         self.diagnostics = {"cost_history": cost_history}
 
     def _fit_gradient_descent_stochastic(
-        self, t0=5, t1=50, n_epochs=50, tolerance=1e-6
-    ):
+        self, t0: int = 5, t1: int = 50, n_epochs: int = 50, tolerance: float = 1e-6
+    ) -> None:
         """
         Fits the model using stochastic gradient descent (SGD) with a
         decaying learning rate.
 
         Parameters are updated after each training example, using one
         randomly shuffled sample per step.
+
+        Args:
+            t0 (int, optional): _description_. Defaults to 5.
+            t1 (int, optional): _description_. Defaults to 50.
+            n_epochs (int, optional): _description_. Defaults to 50.
+            tolerance (float, optional): _description_. Defaults to 1e-6.
+
         """
 
         # Add intercept column
-        X_b = np.c_[np.ones((self.x.shape[0], 1)), self.x]
-        y = self.y.reshape(-1, 1)
         m = self.x.shape[0]
+        X_b = np.c_[np.ones((m, 1)), self.x]
+        y = self.y.reshape(-1, 1)  # ensure shape (m, 1)
 
+        # Random initialization
         theta_hat = np.random.randn(2, 1) * 0.01
         t = 0
         cost_history = []
@@ -167,15 +210,27 @@ class SimpleLinearRegression:
             return t0 / (t + t1)
 
         for epoch in range(n_epochs):
+
+            # Shuffle the order of observations each epoch
             indices = np.random.permutation(m)
             for i in indices:
+                # Pull out our single observation to update gradients
                 xi = X_b[i : i + 1]
                 yi = y[i : i + 1]
+
+                # Update gradients
                 gradients = 2 * xi.T @ ((xi @ theta_hat) - yi)
+
+                # Learning rate decay
                 eta = learning_schedule(t)
+
+                # Home much to update theta_hat by
                 update = eta * gradients
+
+                # Update theta_hat
                 theta_hat -= update
 
+                # Keep track of our 'cost'. We are aiming to minimize this
                 cost = np.mean((X_b @ theta_hat - y) ** 2)
                 cost_history.append(cost)
 
@@ -183,7 +238,7 @@ class SimpleLinearRegression:
                 if np.linalg.norm(update) < tolerance:
                     print(f"[✔] SGD converged at epoch {epoch}, sample {i}, t={t}")
                     break
-                t += 1  # count each update step
+                t += 1  # count each update step for learning rate decay
 
         # Unpack final parameters
         self.beta_0_hat = theta_hat[0, 0]
@@ -193,12 +248,12 @@ class SimpleLinearRegression:
 
     def _fit_gradient_descent_mini_batch(
         self,
-        batch_size=16,
-        eta_0=0.1,
-        decay_rate=0.01,
-        n_epochs=50,
-        tolerance=1e-6,
-    ):
+        batch_size: int = 16,
+        eta_0: float = 0.1,
+        decay_rate: float = 0.01,
+        n_epochs: int = 50,
+        tolerance: float = 1e-6,
+    ) -> None:
         """
         Fits the model using mini-batch gradient descent with a decaying learning rate.
         Each epoch processes randomly shuffled mini-batches of the training data.
@@ -212,20 +267,23 @@ class SimpleLinearRegression:
                 Defaults to 0.01.
             n_epochs (int, optional): Number of passes through the data.
                 Defaults to 50.
-            tolerance (_type_, optional): Threshold for stopping based on
+            tolerance (float, optional): Threshold for stopping based on
                 parameter stability. Defaults to 1e-6.
         """
 
         # Add intercept column
-        X_b = np.c_[np.ones((self.x.shape[0], 1)), self.x]
-        y = self.y.reshape(-1, 1)
         m = self.x.shape[0]
+        X_b = np.c_[np.ones((m, 1)), self.x]
+        y = self.y.reshape(-1, 1)
 
+        # Random initialization
         theta_hat = np.random.randn(2, 1) * 0.01
         t = 0
         cost_history = []
 
         for epoch in range(n_epochs):
+
+            # Shuffle order of observations for each epoch
             indices = np.random.permutation(m)
             X_b_shuffled, y_shuffled = X_b[indices], y[indices]
 
@@ -233,21 +291,30 @@ class SimpleLinearRegression:
                 X_mini = X_b_shuffled[i : i + batch_size]
                 y_mini = y_shuffled[i : i + batch_size]
 
+                # Calculate gradients
                 gradients = (2 / len(X_mini)) * X_mini.T @ (X_mini @ theta_hat - y_mini)
+
+                # Learning decay rate
                 eta_t = eta_0 / (1 + decay_rate * t)
+
+                # How much to update theta_hat by
                 update = eta_t * gradients
+
+                # Update theta_hat
                 theta_hat -= update
 
+                # Keep track of our 'cost'. We are aiming to minimize this
                 cost = np.mean((X_b @ theta_hat - y) ** 2)
                 cost_history.append(cost)
 
+                # Convergence check
                 if np.linalg.norm(update) < tolerance:
                     print(
                         f"[✔] Mini-batch GD converged at epoch {epoch}, "
                         f"batch {i // batch_size}, t={t}"
                     )
                     break
-                t += 1
+                t += 1  # count each update step for learning rate decay
 
         # Unpack final parameters
         self.beta_0_hat = theta_hat[0, 0]
@@ -256,56 +323,56 @@ class SimpleLinearRegression:
         self.diagnostics = {"cost_history": cost_history}
 
     def predict(self, x_new: pd.Series = None):
+        """
+        Calculate predicted values based on learned Simple Linear Regression training
+
+        Args:
+            x_new (pd.Series, optional): New observations to predict target for.
+                Defaults to None.
+
+        Returns:
+            float: Predicted value of x_new's 'y' value
+        """
         if x_new is None:
             x_new = self.x
         return self.beta_0_hat + self.beta_1_hat * x_new
 
-    def residuals(self):
+    def residuals(self) -> float:
+        """
+        Returns:
+            float: Difference between actual 'y' value and predicted 'y' value.
+        """
         return self.y - self.predict()
 
-    def fitted(self):
+    def fitted(self) -> np.ndarray:
+        """
+        Return the predicted y values for the training data.
+
+        Returns:
+            np.ndarray: Predicted y values for the original training data.
+        """
         return self.predict()
-
-    @staticmethod
-    def _calculate_rmse(self, y_actual, y_pred):
-        return np.sqrt(np.mean((y_actual - y_pred) ** 2))
-
-    @staticmethod
-    def _calculate_mae(self, y_actual, y_pred):
-        return np.mean(np.abs(y_actual - y_pred))
-
-    @staticmethod
-    def _calculate_r_squared(self, y_actual, y_pred):
-        return 1 - np.sum((y_actual - y_pred) ** 2) / np.sum(
-            (y_actual - np.mean(y_actual)) ** 2
-        )
-
-    @staticmethod
-    def _format_duration(self, seconds: float) -> str:
-        if seconds < 1e-3:
-            return f"{seconds * 1e6:.2f}µs"
-        elif seconds < 1:
-            return f"{seconds * 1e3:.2f}ms"
-        elif seconds < 60:
-            return f"{seconds:.2f}s"
-        else:
-            mins, secs = divmod(seconds, 60)
-            return f"{int(mins)}m {secs:.2f}s"
 
     def _coefficient_estimators(
         self, x: pd.Series, y: pd.Series, n: int, methods: str = None
-    ):
+    ) -> list:
+        """
+        Run each coefficient estimation method on the current dataset.
+
+        Returns:
+            list: A list of dictionaries containing model diagnostics per method.
+        """
 
         coeff_results = []
-        methods = methods or SimpleLinearRegression.ALL_METHODS
+        methods = methods or SimpleLinearRegressionFromScratch.ALL_METHODS
 
         for method in methods:
-            model = SimpleLinearRegression(x, y)
+            model = SimpleLinearRegressionFromScratch(x, y)
             try:
                 start_time = time.perf_counter()
                 model.fit(method=method)
                 duration = time.perf_counter() - start_time
-                formatted_time = self._format_duration(duration)
+                formatted_time = format_duration(duration)
 
                 y_hat = model.predict()
 
@@ -317,9 +384,9 @@ class SimpleLinearRegression:
                 #   predicted values and the actual
                 # R_squared:
                 """
-                model.rmse = self._calculate_rmse(y, y_hat)
-                model.mae = self._calculate_mae(y, y_hat)
-                model.r_squared = self._calculate_r_squared(y, y_hat)
+                model.rmse = calculate_rmse(y, y_hat)
+                model.mae = calculate_mae(y, y_hat)
+                model.r_squared = calculate_r_squared(y, y_hat)
 
                 # MLflow logging
                 # with start_run(run_name=f"{method}_{n}_samples"):
@@ -359,6 +426,12 @@ class SimpleLinearRegression:
         seed: int = 42,
         methods=None,
     ) -> pd.DataFrame:
+        """
+        Run all coefficient estimation methods on datasets of varying sample sizes.
+
+        Returns:
+            pd.DataFrame: A dataframe of results from all methods and sample sizes.
+        """
 
         results = []
 
@@ -374,8 +447,8 @@ class SimpleLinearRegression:
             np.random.seed(seed)
             for n in n_samples_list:
                 # Generate synthetic data
-                x = pd.Series(np.random.rand(n) * 10)
-                y = 3 + 2 * x + np.random.randn(n) * noise
+                x = pd.Series(2 * np.random.rand(n))
+                y = 4 + 3 * x + np.random.randn(n) * noise
 
                 results.extend(self._coefficient_estimators(x, y, n, methods))
 
@@ -383,13 +456,22 @@ class SimpleLinearRegression:
             ["n_samples", "method", "duration_seconds"]
         )
 
-    def summary(self):
+    def summary(self) -> None:
+        """
+        Print a summary of the fitted model coefficients and metrics.
+        """
         print(f"Method: {self.method}")
-        print(f"Intercept (β₀): {self.beta_0_hat}")
-        print(f"Slope (β₁): {self.beta_1_hat}")
+        print(f"Intercept (β₀): {self.beta_0_hat:.4f}")
+        print(f"Slope (β₁): {self.beta_1_hat:.4f}")
         print()
 
-    def benchmark_summary(self):
+    def benchmark_summary(self) -> pd.DataFrame:
+        """
+        Run a simulation and print the results.
+
+        Returns:
+            pd.DataFrame: Benchmark results across methods and sample sizes.
+        """
         df = self.simulate()
         print(df)
         print()
@@ -397,28 +479,30 @@ class SimpleLinearRegression:
 
 
 if __name__ == "__main__":
-    x_test = pd.Series([1, 2, 3])
-    y_test = pd.Series([1, 2, 3])
 
-    benchmark_model = SimpleLinearRegression(x_test, y_test)
-    benchmark_model.benchmark_summary()
+    x_test = pd.Series(2 * np.random.rand(100))
+    y_test = pd.Series(4 + 3 * x_test + np.random.randn(100))
 
-    model_beta = SimpleLinearRegression(x_test, y_test)
+    # benchmark_model = SimpleLinearRegressionFromScratch(x_test, y_test)
+    # benchmark_model.benchmark_summary()
+
+    model_beta = SimpleLinearRegressionFromScratch(x_test, y_test)
     model_beta.fit("beta_estimations")
     model_beta.summary()
+    plot_model_diagnostics(model_beta)
 
-    model_normal = SimpleLinearRegression(x_test, y_test)
-    model_normal.fit("normal_equation")
-    model_normal.summary()
+    # model_normal = SimpleLinearRegressionFromScratch(x_test, y_test)
+    # model_normal.fit("normal_equation")
+    # model_normal.summary()
 
-    model_gd_batch = SimpleLinearRegression(x_test, y_test)
-    model_gd_batch.fit("gradient_descent_batch")
-    model_gd_batch.summary()
+    # model_gd_batch = SimpleLinearRegressionFromScratch(x_test, y_test)
+    # model_gd_batch.fit("gradient_descent_batch")
+    # model_gd_batch.summary()
 
-    model_gd_stochastic = SimpleLinearRegression(x_test, y_test)
-    model_gd_stochastic.fit("gradient_descent_stochastic")
-    model_gd_stochastic.summary()
+    # model_gd_stochastic = SimpleLinearRegressionFromScratch(x_test, y_test)
+    # model_gd_stochastic.fit("gradient_descent_stochastic")
+    # model_gd_stochastic.summary()
 
-    model_gd_mini_batch = SimpleLinearRegression(x_test, y_test)
-    model_gd_mini_batch.fit("gradient_descent_mini_batch")
-    model_gd_mini_batch.summary()
+    # model_gd_mini_batch = SimpleLinearRegressionFromScratch(x_test, y_test)
+    # model_gd_mini_batch.fit("gradient_descent_mini_batch")
+    # model_gd_mini_batch.summary()
