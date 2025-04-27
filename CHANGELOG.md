@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.0.0] - 2025-04-26
+
+### Added
+
+- Simple Linear Regression implementation (from-scratch, sklearn, pytorch)
+- Benchmarking system to compare performance across implementations
+- Multi-panel visualizations for regression lines, cost histories, and metrics
+- Shared muted color style across all plots
+- Clean console benchmark report table
+- Live CLI training progress bars with tqdm
+- Full numerical matching and validation across frameworks
+
 ## 📦 [v0.4.0] — _Simple Linear Regression: Multi-Implementation Benchmarking_
 
 **Release Date:** 2025-04-25
