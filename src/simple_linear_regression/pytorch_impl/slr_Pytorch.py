@@ -1,4 +1,4 @@
-# mini_project/01_simple_linear_regression/pytorch_impl/slr_Pytorch.py
+# src/simple_linear_regression/pytorch_impl/slr_Pytorch.py
 """
 Implements Simple Linear Regression using PyTorch's interface.
 
@@ -9,17 +9,25 @@ Supports:
 Designed to mirror the from-scratch interface for comparison
 """
 import time
-from typing import Optional, Union
+from typing import Optional
 
 import numpy as np
 import pandas as pd
 import torch
 import torch.nn as nn
 
-from shared_utils.metrics import calculate_mae, calculate_r_squared, calculate_rmse
+from shared_utils.metrics import (
+    calculate_adjusted_r_squated,
+    calculate_mae,
+    calculate_median_ae,
+    calculate_mse,
+    calculate_r_squared,
+    calculate_rmse,
+)
 from shared_utils.utils import format_duration
 
 # from shared_utils.visualizations import plot_model_diagnostics
+torch.set_default_dtype(torch.float64)
 
 
 class SimpleLinearRegressionPyTorch:
@@ -45,21 +53,28 @@ class SimpleLinearRegressionPyTorch:
             x (pd.Series): Feature values.
             y (pd.Series): Target values.
         """
-        self.x: torch.Tensor = torch.tensor(x.values, dtype=torch.float32).view(-1, 1)
-        self.y: torch.Tensor = torch.tensor(y.values, dtype=torch.float32).view(-1, 1)
+        self.x: torch.Tensor = torch.tensor(x.values, dtype=torch.float64).view(-1, 1)
+        self.y: torch.Tensor = torch.tensor(y.values, dtype=torch.float64).view(-1, 1)
 
         self.model: Optional[nn.Module] = None
         self.beta_0_hat: Optional[float] = None
         self.beta_1_hat: Optional[float] = None
 
+        self.mse: Optional[float] = None
         self.rmse: Optional[float] = None
         self.mae: Optional[float] = None
+        self.median_ae: Optional[float] = None
         self.r_squared: Optional[float] = None
+        self.adjusted_r_squared: Optional[float] = None
+
+        self.duration_seconds: float = 0.0
 
         self.diagnostics: dict = {}
 
         # PyTorch initialization
         self.model = nn.Linear(1, 1)
+        nn.init.normal_(self.model.weight, mean=0.0, std=0.01)
+        nn.init.zeros_(self.model.bias)
         self.loss_fn = None
         self.optimizer = None
 
@@ -96,21 +111,19 @@ class SimpleLinearRegressionPyTorch:
         """
         Fits the model using a beta estimation equivalent in PyTorch.
         """
+
+        x = self.x.double()
+        y = self.y.double()
+
         # Initialize feature and target means
-        x_bar = torch.mean(self.x)
-        y_bar = torch.mean(self.y)
+        x_bar = torch.mean(x)
+        y_bar = torch.mean(y)
 
         # Computer coefficient estimates
-        self.beta_1_hat = (
-            (
-                torch.sum((self.x - x_bar) * (self.y - y_bar))
-                / torch.sum((self.x - x_bar) ** 2)
-            )
-            .detach()
-            .cpu()
-            .item()
+        self.beta_1_hat = np.float64(
+            torch.sum((x - x_bar) * (y - y_bar)) / torch.sum((x - x_bar) ** 2)
         )
-        self.beta_0_hat = (y_bar - self.beta_1_hat * x_bar).detach().cpu().item()
+        self.beta_0_hat = np.float64(y_bar - self.beta_1_hat * x_bar)
 
         self.diagnostics = {}  # No dynamics for closed-form method
 
@@ -120,18 +133,19 @@ class SimpleLinearRegressionPyTorch:
         """
 
         # Add intercept column
-        X_b = torch.cat([torch.ones((self.x.shape[0], 1)), self.x], dim=1)
+        X_b = torch.cat([torch.ones((self.x.shape[0], 1)), self.x], dim=1).double()
+        y_b = self.y.double()
 
         # Normal Equation calculation
-        theta_hat = torch.linalg.pinv(X_b.T @ X_b) @ (X_b.T @ self.y)
+        theta_hat = torch.linalg.pinv(X_b.T @ X_b) @ (X_b.T @ y_b)
 
         # Unpack final parameters
-        self.beta_0_hat = theta_hat[0].detach().cpu().item()
-        self.beta_1_hat = theta_hat[1].detach().cpu().item()
+        self.beta_0_hat = np.float64(theta_hat[0])
+        self.beta_1_hat = np.float64(theta_hat[1])
 
         self.diagnostics = {}  # No dynamics for closed-form method
 
-    def _fit_gradient_descent_batch(self, n_epochs: int = 50, lr: float = 0.01) -> None:
+    def _fit_gradient_descent_batch(self, n_epochs: int = 50, lr: float = 0.05) -> None:
         """
         Fits the model using batch gradient descent.
 
@@ -139,6 +153,10 @@ class SimpleLinearRegressionPyTorch:
             n_epochs (int, optional): Number of iterations. Defaults to 50.
             lr (float, optional): Learning rate. Defaults to 0.01.
         """
+        # Re-initialize model freshly
+        self.model = nn.Linear(1, 1)
+        nn.init.normal_(self.model.weight, mean=0.0, std=0.01)
+        nn.init.zeros_(self.model.bias)
 
         # Initialize loss function and optimizer
         self.loss_fn = nn.MSELoss()
@@ -170,7 +188,7 @@ class SimpleLinearRegressionPyTorch:
         self.diagnostics = {"cost_history": cost_history}
 
     def _fit_gradient_descent_stochastic(
-        self, n_epochs: int = 50, lr: float = 0.01
+        self, n_epochs: int = 50, lr: float = 0.05
     ) -> None:
         """
         Fits the model using stochastic gradient descent.
@@ -179,6 +197,10 @@ class SimpleLinearRegressionPyTorch:
             n_epochs (int, optional): Number of iterations. Defaults to 50.
             lr (float, optional): Learning rate. Defaults to 0.01.
         """
+        # Re-initialize model freshly
+        self.model = nn.Linear(1, 1)
+        nn.init.normal_(self.model.weight, mean=0.0, std=0.01)
+        nn.init.zeros_(self.model.bias)
 
         # Initialize loss function and optimizer
         self.loss_fn = nn.MSELoss()
@@ -222,7 +244,7 @@ class SimpleLinearRegressionPyTorch:
         self.diagnostics = {"cost_history": cost_history}
 
     def _fit_gradient_descent_mini_batch(
-        self, n_epochs: int = 50, batch_size: int = 32, lr: float = 0.01
+        self, n_epochs: int = 50, batch_size: int = 32, lr: float = 0.05
     ) -> None:
         """
         Fits the model using mini-batch gradient descent.
@@ -232,6 +254,11 @@ class SimpleLinearRegressionPyTorch:
             batch_size (int, optional): Size of each mini-batch. Defaults to 32.
             lr (float, optional): Learning rate. Defaults to 0.01.
         """
+        # Re-initialize model freshly
+        self.model = nn.Linear(1, 1)
+        nn.init.normal_(self.model.weight, mean=0.0, std=0.01)
+        nn.init.zeros_(self.model.bias)
+
         # Initialize loss function and optimizer
         self.loss_fn = nn.MSELoss()
         self.optimizer = torch.optim.SGD(self.model.parameters(), lr=lr)
@@ -277,27 +304,38 @@ class SimpleLinearRegressionPyTorch:
         # 6. Populate diagnostic dict
         self.diagnostics = {"cost_history": cost_history}
 
-    def predict(
-        self, x_new: Optional[Union[pd.Series, np.ndarray, torch.Tensor]] = None
-    ) -> np.ndarray:
+    def predict(self, X: Optional[pd.Series] = None) -> np.ndarray:
         """
-        Predict target values for new input data.
+        Predicts y values using the trained model.
 
         Args:
-            x_new (Optional): New input features to predict on.
+            X (Optional[pd.Series], optional): New input data. Defaults to training X.
 
         Returns:
-            np.ndarray: Predicted target values.
+            np.ndarray: Predicted y values.
         """
-        if x_new is None:
+        if X is None:
             x_new = self.x
-        if isinstance(x_new, pd.Series):
-            x_new = x_new.to_numpy()
-        if isinstance(x_new, np.ndarray):
-            x_new = torch.tensor(x_new, dtype=torch.float32).view(-1, 1)
-        with torch.no_grad():
-            y_pred = self.model(x_new)
-        return y_pred.detach().numpy().flatten()
+        else:
+            if isinstance(X, pd.Series):
+                x_new = torch.tensor(X.values, dtype=self.x.dtype).view(-1, 1)
+            elif isinstance(X, np.ndarray):
+                x_new = torch.tensor(X, dtype=self.x.dtype).reshape(-1, 1)
+            else:
+                raise ValueError(f"Unsupported input type for X: {type(X)}")
+
+        # If trained via beta_estimations or normal_equation, use manual formula
+        if self.method in ["beta_estimations", "normal_equation"]:
+            y_pred = (
+                self.beta_0_hat
+                + self.beta_1_hat * x_new.detach().cpu().numpy().flatten()
+            )
+        else:
+            # Use model prediction
+            x_new = x_new.to(self.model.weight.dtype)
+            y_pred = self.model(x_new).detach().cpu().numpy().flatten()
+
+        return y_pred
 
     def residuals(self) -> np.ndarray:
         """
@@ -316,6 +354,16 @@ class SimpleLinearRegressionPyTorch:
             np.ndarray: Predicted values.
         """
         return self.predict()
+
+    def calculate_metrics(self) -> None:
+        y_pred = self.predict()
+        y_actual = self.y.detach().cpu().numpy().flatten()  # convert tensor to numpy
+        self.mse = calculate_mse(y_actual, y_pred)
+        self.rmse = calculate_rmse(y_actual, y_pred)
+        self.mae = calculate_mae(y_actual, y_pred)
+        self.median_ae = calculate_median_ae(y_actual, y_pred)
+        self.r_squared = calculate_r_squared(y_actual, y_pred)
+        self.adjusted_r_squared = calculate_adjusted_r_squated(y_actual, y_pred)
 
     def _coefficient_estimators(
         self, x: pd.Series, y: pd.Series, n: int, methods: str = None
@@ -338,8 +386,6 @@ class SimpleLinearRegressionPyTorch:
                 duration = time.perf_counter() - start_time
                 formatted_time = format_duration(duration)
 
-                y_hat = model.predict()
-
                 """
                 # Performance metrics
                 # RMSE: Root Mean Squared Error - Square root of the average of the
@@ -348,9 +394,7 @@ class SimpleLinearRegressionPyTorch:
                 #   predicted values and the actual
                 # R_squared:
                 """
-                model.rmse = calculate_rmse(y, y_hat)
-                model.mae = calculate_mae(y, y_hat)
-                model.r_squared = calculate_r_squared(y, y_hat)
+                model.calculate_metrics()
 
                 # MLflow logging
                 # with start_run(run_name=f"{method}_{n}_samples"):
@@ -454,7 +498,6 @@ if __name__ == "__main__":
     model_beta = SimpleLinearRegressionPyTorch(x_test, y_test)
     model_beta.fit("beta_estimations")
     model_beta.summary()
-    # plot_model_diagnostics(model_beta)
 
     model_normal = SimpleLinearRegressionPyTorch(x_test, y_test)
     model_normal.fit("normal_equation")

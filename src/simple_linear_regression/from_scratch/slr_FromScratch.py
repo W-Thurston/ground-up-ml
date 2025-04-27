@@ -1,4 +1,4 @@
-# mini_project/01_simple_linear_regression/from_scratch/slr_FromScratch.py
+# src/simple_linear_regression/from_scratch/slr_FromScratch.py
 """
 Implements Simple Linear Regression using from-scratch math and logic.
 
@@ -14,9 +14,15 @@ from typing import Optional
 import numpy as np
 import pandas as pd
 
-from shared_utils.metrics import calculate_mae, calculate_r_squared, calculate_rmse
+from shared_utils.metrics import (
+    calculate_adjusted_r_squated,
+    calculate_mae,
+    calculate_median_ae,
+    calculate_mse,
+    calculate_r_squared,
+    calculate_rmse,
+)
 from shared_utils.utils import format_duration
-from shared_utils.visualizations import plot_model_diagnostics
 
 # from shared_utils.mlflow_logger import log_metrics, log_params, start_run
 
@@ -41,16 +47,21 @@ class SimpleLinearRegressionFromScratch:
         self.y: np.ndarray = y.to_numpy()
 
         # Method to calculate coefficient estimations
-        self.method: str = ""
+        self.method: str = None
 
         # Coefficient Estimations
         self.beta_0_hat: Optional[float] = None
         self.beta_1_hat: Optional[float] = None
 
         # Performance metrics
+        self.mse: Optional[float] = None
         self.rmse: Optional[float] = None
         self.mae: Optional[float] = None
+        self.median_ae: Optional[float] = None
         self.r_squared: Optional[float] = None
+        self.adjusted_r_squared: Optional[float] = None
+
+        self.duration_seconds: float = 0.0
 
         self.diagnostics = {}
 
@@ -236,7 +247,7 @@ class SimpleLinearRegressionFromScratch:
 
                 # Convergence check
                 if np.linalg.norm(update) < tolerance:
-                    print(f"[✔] SGD converged at epoch {epoch}, sample {i}, t={t}")
+                    # print(f"[✔] SGD converged at epoch {epoch}, sample {i}, t={t}")
                     break
                 t += 1  # count each update step for learning rate decay
 
@@ -353,6 +364,15 @@ class SimpleLinearRegressionFromScratch:
         """
         return self.predict()
 
+    def calculate_metrics(self) -> None:
+        y_pred = self.predict()
+        self.mse = calculate_mse(self.y, y_pred)
+        self.rmse = calculate_rmse(self.y, y_pred)
+        self.mae = calculate_mae(self.y, y_pred)
+        self.median_ae = calculate_median_ae(self.y, y_pred)
+        self.r_squared = calculate_r_squared(self.y, y_pred)
+        self.adjusted_r_squared = calculate_adjusted_r_squated(self.y, y_pred)
+
     def _coefficient_estimators(
         self, x: pd.Series, y: pd.Series, n: int, methods: str = None
     ) -> list:
@@ -374,8 +394,6 @@ class SimpleLinearRegressionFromScratch:
                 duration = time.perf_counter() - start_time
                 formatted_time = format_duration(duration)
 
-                y_hat = model.predict()
-
                 """
                 # Performance metrics
                 # RMSE: Root Mean Squared Error - Square root of the average of the
@@ -384,9 +402,7 @@ class SimpleLinearRegressionFromScratch:
                 #   predicted values and the actual
                 # R_squared:
                 """
-                model.rmse = calculate_rmse(y, y_hat)
-                model.mae = calculate_mae(y, y_hat)
-                model.r_squared = calculate_r_squared(y, y_hat)
+                model.calculate_metrics()
 
                 # MLflow logging
                 # with start_run(run_name=f"{method}_{n}_samples"):
@@ -489,7 +505,6 @@ if __name__ == "__main__":
     model_beta = SimpleLinearRegressionFromScratch(x_test, y_test)
     model_beta.fit("beta_estimations")
     model_beta.summary()
-    plot_model_diagnostics(model_beta)
 
     # model_normal = SimpleLinearRegressionFromScratch(x_test, y_test)
     # model_normal.fit("normal_equation")

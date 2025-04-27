@@ -1,4 +1,4 @@
-# mini_project/01_simple_linear_regression/sklearn_impl/slr_Sklearn.py
+# src/simple_linear_regression/sklearn_impl/slr_Sklearn.py
 """
 Implements Simple Linear Regression using Scikit-learn's interface.
 
@@ -17,13 +17,14 @@ import pandas as pd
 from sklearn.linear_model import LinearRegression, SGDRegressor
 
 from shared_utils.metrics import (
+    calculate_adjusted_r_squated,
     calculate_mae,
+    calculate_median_ae,
     calculate_mse,
     calculate_r_squared,
     calculate_rmse,
 )
 from shared_utils.utils import format_duration
-from shared_utils.visualizations import plot_model_diagnostics
 
 
 class SimpleLinearRegressionSklearn:
@@ -54,7 +55,7 @@ class SimpleLinearRegressionSklearn:
         self.y: np.ndarray = y.to_numpy()
 
         # Method to calculate coefficient estimations
-        self.method: str = ""
+        self.method: str = None
 
         self.model: Optional[Union[LinearRegression, SGDRegressor]] = None
 
@@ -63,9 +64,14 @@ class SimpleLinearRegressionSklearn:
         self.beta_1_hat: Optional[float] = None
 
         # Performance metrics
+        self.mse: Optional[float] = None
         self.rmse: Optional[float] = None
         self.mae: Optional[float] = None
+        self.median_ae: Optional[float] = None
         self.r_squared: Optional[float] = None
+        self.adjusted_r_squared: Optional[float] = None
+
+        self.duration_seconds: float = 0.0
 
         self.diagnostics: dict = {}
 
@@ -271,6 +277,15 @@ class SimpleLinearRegressionSklearn:
         """
         return self.predict()
 
+    def calculate_metrics(self) -> None:
+        y_pred = self.predict()
+        self.mse = calculate_mse(self.y, y_pred)
+        self.rmse = calculate_rmse(self.y, y_pred)
+        self.mae = calculate_mae(self.y, y_pred)
+        self.median_ae = calculate_median_ae(self.y, y_pred)
+        self.r_squared = calculate_r_squared(self.y, y_pred)
+        self.adjusted_r_squared = calculate_adjusted_r_squated(self.y, y_pred)
+
     def _coefficient_estimators(
         self, x: pd.Series, y: pd.Series, n: int, methods: str = None
     ) -> list:
@@ -292,8 +307,6 @@ class SimpleLinearRegressionSklearn:
                 duration = time.perf_counter() - start_time
                 formatted_time = format_duration(duration)
 
-                y_hat = model.predict()
-
                 """
                 # Performance metrics
                 # RMSE: Root Mean Squared Error - Square root of the average of the
@@ -302,9 +315,7 @@ class SimpleLinearRegressionSklearn:
                 #   predicted values and the actual
                 # R_squared:
                 """
-                model.rmse = calculate_rmse(y, y_hat)
-                model.mae = calculate_mae(y, y_hat)
-                model.r_squared = calculate_r_squared(y, y_hat)
+                model.calculate_metrics()
 
                 # MLflow logging
                 # with start_run(run_name=f"{method}_{n}_samples"):
@@ -409,7 +420,6 @@ if __name__ == "__main__":
     model_normal = SimpleLinearRegressionSklearn(x_test, y_test)
     model_normal.fit("normal_equation")
     model_normal.summary()
-    plot_model_diagnostics(model_normal)
 
     model_gd_batch = SimpleLinearRegressionSklearn(x_test, y_test)
     model_gd_batch.fit("gradient_descent_batch")
