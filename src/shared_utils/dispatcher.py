@@ -3,8 +3,6 @@
 import time
 
 import pandas as pd
-from tqdm import tqdm
-
 from src.simple_linear_regression.from_scratch.slr_FromScratch import (
     SimpleLinearRegressionFromScratch,
 )
@@ -14,6 +12,7 @@ from src.simple_linear_regression.pytorch_impl.slr_Pytorch import (
 from src.simple_linear_regression.sklearn_impl.slr_Sklearn import (
     SimpleLinearRegressionSklearn,
 )
+from tqdm import tqdm
 
 MODEL_DISPATCH = {
     "from_scratch": SimpleLinearRegressionFromScratch,
