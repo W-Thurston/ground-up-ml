@@ -1,12 +1,12 @@
 import numpy as np
 import pandas as pd
 
-from shared_utils.dispatcher import run_benchmarks
-from shared_utils.report import generate_report
+from core.dispatcher import run_benchmarks
+from utils.report import generate_report
 
 # Imports from your project
-from shared_utils.utils import parse_visualization_input
-from shared_utils.visualizations import plot_comparison_grid
+from utils.utils import parse_visualization_input
+from visualizations.visualizations import plot_comparison_grid
 
 # 1. Create small synthetic dataset
 np.random.seed(42)

@@ -1,4 +1,4 @@
-# shared_utils/utils.py
+# src/utils/utils.py
 
 
 def format_duration(seconds: float) -> str:

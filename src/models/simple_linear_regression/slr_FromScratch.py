@@ -1,4 +1,4 @@
-# src/simple_linear_regression/from_scratch/slr_FromScratch.py
+# src/models/simple_linear_regression/slr_FromScratch.py
 """
 Implements Simple Linear Regression using from-scratch math and logic.
 
@@ -14,7 +14,7 @@ from typing import Optional
 import numpy as np
 import pandas as pd
 
-from shared_utils.metrics import (
+from core.metrics.metrics import (
     calculate_adjusted_r_squated,
     calculate_mae,
     calculate_median_ae,
@@ -22,9 +22,9 @@ from shared_utils.metrics import (
     calculate_r_squared,
     calculate_rmse,
 )
-from shared_utils.utils import format_duration
+from utils.utils import format_duration
 
-# from shared_utils.mlflow_logger import log_metrics, log_params, start_run
+# from utils.mlflow_logger import log_metrics, log_params, start_run
 
 
 class SimpleLinearRegressionFromScratch:

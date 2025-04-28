@@ -1,4 +1,4 @@
-# src/simple_linear_regression/sklearn_impl/slr_Sklearn.py
+# src/models/simple_linear_regression/slr_Sklearn.py
 """
 Implements Simple Linear Regression using Scikit-learn's interface.
 
@@ -16,7 +16,7 @@ import numpy as np
 import pandas as pd
 from sklearn.linear_model import LinearRegression, SGDRegressor
 
-from shared_utils.metrics import (
+from core.metrics.metrics import (
     calculate_adjusted_r_squated,
     calculate_mae,
     calculate_median_ae,
@@ -24,7 +24,7 @@ from shared_utils.metrics import (
     calculate_r_squared,
     calculate_rmse,
 )
-from shared_utils.utils import format_duration
+from utils.utils import format_duration
 
 
 class SimpleLinearRegressionSklearn:

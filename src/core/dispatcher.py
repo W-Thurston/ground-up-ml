@@ -1,18 +1,19 @@
-# shared_utils/dispatcher.py
+# src/core/dispatcher.py
 
 import time
 
 import pandas as pd
-from src.simple_linear_regression.from_scratch.slr_FromScratch import (
+from tqdm import tqdm
+
+from src.models.simple_linear_regression.slr_FromScratch import (
     SimpleLinearRegressionFromScratch,
 )
-from src.simple_linear_regression.pytorch_impl.slr_Pytorch import (
+from src.models.simple_linear_regression.slr_Pytorch import (
     SimpleLinearRegressionPyTorch,
 )
-from src.simple_linear_regression.sklearn_impl.slr_Sklearn import (
+from src.models.simple_linear_regression.slr_Sklearn import (
     SimpleLinearRegressionSklearn,
 )
-from tqdm import tqdm
 
 MODEL_DISPATCH = {
     "from_scratch": SimpleLinearRegressionFromScratch,

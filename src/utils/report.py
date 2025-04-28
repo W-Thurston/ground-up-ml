@@ -1,8 +1,8 @@
-# shared_utils/report.py
+# src/utils/report.py
 
 from tabulate import tabulate
 
-from shared_utils.utils import format_duration
+from utils.utils import format_duration
 
 
 def generate_report(results: list[dict], output_format: str = "console") -> None:

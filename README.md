@@ -27,7 +27,7 @@ src/
 ...
 ```
 
-Shared folders for `data/` and `shared_utils/` allow easy reuse of common loaders, metrics, and plotting functions across implementations.
+Shared folders for `data/` and `utils/` allow easy reuse of common loaders, metrics, and plotting functions across implementations.
 
 ---
 
