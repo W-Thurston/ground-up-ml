@@ -14,7 +14,7 @@ from typing import Optional
 import numpy as np
 import pandas as pd
 
-from core.metrics.metrics import (
+from src.core.metrics.metrics import (
     calculate_adjusted_r_squated,
     calculate_mae,
     calculate_median_ae,
@@ -22,12 +22,15 @@ from core.metrics.metrics import (
     calculate_r_squared,
     calculate_rmse,
 )
-from utils.utils import format_duration
+from src.core.registry import register_model
+from src.models.ground_up_ml_base_model import GroundUpMLBaseModel
+from src.utils.utils import format_duration
 
-# from utils.mlflow_logger import log_metrics, log_params, start_run
+# from src.utils.mlflow_logger import log_metrics, log_params, start_run
 
 
-class SimpleLinearRegressionFromScratch:
+@register_model("from_scratch", task_type="regression", group="simple_linear")
+class SimpleLinearRegressionFromScratch(GroundUpMLBaseModel):
     """
     A Python implementation of Simple Linear Regression.
     The interface of SimpleLinearRegressionFromScratch matches
@@ -65,7 +68,11 @@ class SimpleLinearRegressionFromScratch:
 
         self.diagnostics = {}
 
-    def fit(self, method: str = None) -> None:
+    @property
+    def name(self):
+        return "SimpleLinearRegression-FromScratch"
+
+    def fit(self, X, y, method: str = None) -> None:
         """
         Routing function to call specific coefficient estimator methods
 

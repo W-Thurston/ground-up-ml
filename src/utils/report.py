@@ -2,7 +2,7 @@
 
 from tabulate import tabulate
 
-from utils.utils import format_duration
+from src.utils.utils import format_duration
 
 
 def generate_report(results: list[dict], output_format: str = "console") -> None:
@@ -44,22 +44,31 @@ def console_report(results: list[dict]) -> None:
         "Adjusted R²",
         "Training Time (s)",
     ]
-    table = [
-        [
-            res["model_name"],
-            res["method_name"],
-            f"{res['beta_0']:.4f}",
-            f"{res['beta_1']:.4f}",
-            f"{res['rmse']:.4f}",
-            f"{res['mae']:.4f}",
-            f"{res['mse']:.4f}",
-            f"{res['median_ae']:.4f}",
-            f"{res['r_squared']:.4f}",
-            f"{res['adjusted_r_squared']:.4f}",
-            f"{format_duration(res['training_time_sec'])}",
-        ]
-        for res in results
-    ]
+    table = []
+    for res in results:
+        table.append(
+            [
+                res.get("model_name", ""),
+                res.get("method_name", ""),
+                (
+                    f"{res.get('beta_0', float('nan')):.4f}"
+                    if res.get("beta_0") is not None
+                    else "N/A"
+                ),
+                (
+                    f"{res.get('beta_1', float('nan')):.4f}"
+                    if res.get("beta_1") is not None
+                    else "N/A"
+                ),
+                f"{res.get('rmse', float('nan')):.4f}",
+                f"{res.get('mae', float('nan')):.4f}",
+                f"{res.get('mse', float('nan')):.4f}",
+                f"{res.get('median_ae', float('nan')):.4f}",
+                f"{res.get('r_squared', float('nan')):.4f}",
+                f"{res.get('adjusted_r_squared', float('nan')):.4f}",
+                format_duration(res.get("training_time_sec", 0.0)),
+            ]
+        )
     print(
         tabulate(
             table,

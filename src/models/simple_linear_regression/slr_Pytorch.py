@@ -16,7 +16,7 @@ import pandas as pd
 import torch
 import torch.nn as nn
 
-from core.metrics.metrics import (
+from src.core.metrics.metrics import (
     calculate_adjusted_r_squated,
     calculate_mae,
     calculate_median_ae,
@@ -24,13 +24,16 @@ from core.metrics.metrics import (
     calculate_r_squared,
     calculate_rmse,
 )
-from utils.utils import format_duration
+from src.core.registry import register_model
+from src.models.ground_up_ml_base_model import GroundUpMLBaseModel
+from src.utils.utils import format_duration
 
-# from utils.visualizations import plot_model_diagnostics
+# from src.utils.visualizations import plot_model_diagnostics
 torch.set_default_dtype(torch.float64)
 
 
-class SimpleLinearRegressionPyTorch:
+@register_model("pytorch", task_type="regression", group="simple_linear")
+class SimpleLinearRegressionPyTorch(GroundUpMLBaseModel):
     """
     A PyTorch implementation of Simple Linear Regression.
     The interface of SimpleLinearRegressionPyTorch matches
@@ -78,7 +81,11 @@ class SimpleLinearRegressionPyTorch:
         self.loss_fn = None
         self.optimizer = None
 
-    def fit(self, method: str = None) -> None:
+    @property
+    def name(self):
+        return "SimpleLinearRegression-PyTorch"
+
+    def fit(self, X, y, method: str = None) -> None:
         """
         Routing function to call specific coefficient estimator methods
 

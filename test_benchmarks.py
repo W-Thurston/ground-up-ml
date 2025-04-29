@@ -1,12 +1,13 @@
+# test_benchmarks.py
 import numpy as np
 import pandas as pd
 
-from core.dispatcher import run_benchmarks
-from utils.report import generate_report
+from src.core.dispatcher import run_benchmarks
+from src.utils.report import generate_report
 
 # Imports from your project
-from utils.utils import parse_visualization_input
-from visualizations.visualizations import plot_comparison_grid
+from src.utils.utils import parse_visualization_input
+from src.visualizations.visualizations import plot_comparison_grid
 
 # 1. Create small synthetic dataset
 np.random.seed(42)
@@ -41,8 +42,8 @@ for (model_name, method_name), model in trained_models.items():
             "median_ae": model.median_ae,
             "r_squared": model.r_squared,
             "adjusted_r_squared": model.adjusted_r_squared,
-            "beta_0": model.beta_0_hat,
-            "beta_1": model.beta_1_hat,
+            "beta_0": getattr(model, "beta_0_hat", None),
+            "beta_1": getattr(model, "beta_1_hat", None),
             "training_time_sec": model.duration_seconds,
         }
     )

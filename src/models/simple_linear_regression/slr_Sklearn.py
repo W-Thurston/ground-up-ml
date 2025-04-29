@@ -16,7 +16,7 @@ import numpy as np
 import pandas as pd
 from sklearn.linear_model import LinearRegression, SGDRegressor
 
-from core.metrics.metrics import (
+from src.core.metrics.metrics import (
     calculate_adjusted_r_squated,
     calculate_mae,
     calculate_median_ae,
@@ -24,10 +24,13 @@ from core.metrics.metrics import (
     calculate_r_squared,
     calculate_rmse,
 )
-from utils.utils import format_duration
+from src.core.registry import register_model
+from src.models.ground_up_ml_base_model import GroundUpMLBaseModel
+from src.utils.utils import format_duration
 
 
-class SimpleLinearRegressionSklearn:
+@register_model("sklearn", task_type="regression", group="simple_linear")
+class SimpleLinearRegressionSklearn(GroundUpMLBaseModel):
     """
     A wrapper around sklearn's SGDRegressor that mimics the interface of
     SimpleLinearRegressionFromScratch for consistent visualization and benchmarking.
@@ -75,7 +78,11 @@ class SimpleLinearRegressionSklearn:
 
         self.diagnostics: dict = {}
 
-    def fit(self, method: str = None) -> None:
+    @property
+    def name(self):
+        return "SimpleLinearRegression-Sklearn"
+
+    def fit(self, X, y, method: str = None) -> None:
         """
         Routing function to call specific coefficient estimator methods
 

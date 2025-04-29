@@ -5,21 +5,17 @@ import time
 import pandas as pd
 from tqdm import tqdm
 
-from src.models.simple_linear_regression.slr_FromScratch import (
-    SimpleLinearRegressionFromScratch,
-)
-from src.models.simple_linear_regression.slr_Pytorch import (
-    SimpleLinearRegressionPyTorch,
-)
-from src.models.simple_linear_regression.slr_Sklearn import (
-    SimpleLinearRegressionSklearn,
+from src.core.registry import MODEL_REGISTRY
+
+# Import model files to trigger registration
+from src.models.simple_linear_regression import (  # noqa: F401
+    slr_FromScratch,
+    slr_Pytorch,
+    slr_Sklearn,
 )
 
-MODEL_DISPATCH = {
-    "from_scratch": SimpleLinearRegressionFromScratch,
-    "sklearn": SimpleLinearRegressionSklearn,
-    "pytorch": SimpleLinearRegressionPyTorch,
-}
+# import src.models.simple_linear_regression.  # noqa: F401
+# import src.models.simple_linear_regression.  # noqa: F401
 
 
 def run_benchmarks(pairs: list[tuple[str, str]], X: pd.Series, y: pd.Series) -> dict:
@@ -40,11 +36,11 @@ def run_benchmarks(pairs: list[tuple[str, str]], X: pd.Series, y: pd.Series) -> 
         for model_name, method_name in pairs:
             pbar.set_description(f"Training {model_name}:{method_name}")
 
-            ModelClass = MODEL_DISPATCH[model_name]
+            ModelClass = MODEL_REGISTRY[model_name]["class"]
             model = ModelClass(X, y)
 
             start = time.time()
-            model.fit(method_name)
+            model.fit(X, y, method_name)
             end = time.time()
 
             model.duration_seconds = end - start
