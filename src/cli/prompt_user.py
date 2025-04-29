@@ -130,4 +130,12 @@ def prompt_user() -> dict:
     elif mode_choice == "3":
         settings["mode"] = "compare"
 
+    save = input("\nSave these settings to a JSON file? (y/n): ").strip().lower()
+    if save == "y":
+        import json
+
+        with open("src/config/saved_config.json", "w") as f:
+            json.dump(settings, f, indent=2)
+        print("Saved to src/config/saved_config.json ✅")
+
     return settings

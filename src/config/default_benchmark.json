@@ -1,0 +1,15 @@
+{
+    "mode": "benchmark_only",
+    "task_type": "regression",
+    "selected_models": ["from_scratch", "sklearn", "pytorch"],
+    "selected_methods": [
+      "normal_equation",
+      "beta_estimations",
+      "gradient_descent_batch",
+      "gradient_descent_stochastic",
+      "gradient_descent_mini_batch"
+    ],
+    "data_path": null,
+    "output_format": "console",
+    "save_plot": "data/output/default_benchmark_plot.png"
+  }
