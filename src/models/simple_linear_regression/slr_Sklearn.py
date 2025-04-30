@@ -414,28 +414,3 @@ class SimpleLinearRegressionSklearn(GroundUpMLBaseModel):
         print(df)
         print()
         return df
-
-
-if __name__ == "__main__":
-
-    x_test = pd.Series(2 * np.random.rand(100))
-    y_test = pd.Series(4 + 3 * x_test + np.random.randn(100))
-
-    benchmark_model = SimpleLinearRegressionSklearn(x_test, y_test)
-    benchmark_model.benchmark_summary()
-
-    model_normal = SimpleLinearRegressionSklearn(x_test, y_test)
-    model_normal.fit("normal_equation")
-    model_normal.summary()
-
-    model_gd_batch = SimpleLinearRegressionSklearn(x_test, y_test)
-    model_gd_batch.fit("gradient_descent_batch")
-    model_gd_batch.summary()
-
-    model_gd_stochastic = SimpleLinearRegressionSklearn(x_test, y_test)
-    model_gd_stochastic.fit("gradient_descent_stochastic")
-    model_gd_stochastic.summary()
-
-    model_gd_mini_batch = SimpleLinearRegressionSklearn(x_test, y_test)
-    model_gd_mini_batch.fit("gradient_descent_mini_batch")
-    model_gd_mini_batch.summary()

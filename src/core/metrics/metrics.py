@@ -40,7 +40,7 @@ def calculate_r_squared(y_actual, y_pred):
     )
 
 
-def calculate_adjusted_r_squated(y_actual, y_pred, p: int = 1):
+def calculate_adjusted_r_squared(y_actual, y_pred, p: int = 1):
     """
     Adjusts R² for number of predictors. Important for multivariate,
         but nice to include now.

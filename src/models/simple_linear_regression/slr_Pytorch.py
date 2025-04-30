@@ -492,32 +492,3 @@ class SimpleLinearRegressionPyTorch(GroundUpMLBaseModel):
         print(df)
         print()
         return df
-
-
-if __name__ == "__main__":
-
-    x_test = pd.Series(2 * np.random.rand(100))
-    y_test = pd.Series(4 + 3 * x_test + np.random.randn(100))
-
-    benchmark_model = SimpleLinearRegressionPyTorch(x_test, y_test)
-    benchmark_model.benchmark_summary()
-
-    model_beta = SimpleLinearRegressionPyTorch(x_test, y_test)
-    model_beta.fit("beta_estimations")
-    model_beta.summary()
-
-    model_normal = SimpleLinearRegressionPyTorch(x_test, y_test)
-    model_normal.fit("normal_equation")
-    model_normal.summary()
-
-    model_gd_batch = SimpleLinearRegressionPyTorch(x_test, y_test)
-    model_gd_batch.fit("gradient_descent_batch")
-    model_gd_batch.summary()
-
-    model_gd_stochastic = SimpleLinearRegressionPyTorch(x_test, y_test)
-    model_gd_stochastic.fit("gradient_descent_stochastic")
-    model_gd_stochastic.summary()
-
-    model_gd_mini_batch = SimpleLinearRegressionPyTorch(x_test, y_test)
-    model_gd_mini_batch.fit("gradient_descent_mini_batch")
-    model_gd_mini_batch.summary()

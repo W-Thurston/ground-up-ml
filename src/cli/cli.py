@@ -5,11 +5,8 @@ import argparse
 import pandas as pd
 
 from src.core.dispatcher import run_benchmarks
-
-# from src.core.registry import MODEL_REGISTRY
+from src.data.generate_data import generate_synthetic_data
 from src.utils.report import generate_report
-
-# from src.utils.utils import parse_visualization_input
 from src.visualizations.visualizations import plot_comparison_grid
 
 
@@ -24,15 +21,14 @@ def load_dataset(data_path: str = None):
         import numpy as np
 
         np.random.seed(42)
-        X = pd.Series(np.random.rand(1000))
-        y = 3.0 + 2.0 * X + np.random.randn(1000) * 0.2
+        X, y = generate_synthetic_data(n=1000)
 
     return X, y
 
 
 def run_experiment(settings: dict):
     """
-    Runa  full training + reporting + visualization cycle based on settings.
+    Run training, reporting, and visualization for one or more model-method pairs.
 
     Args:
         settings (dict): _description_
