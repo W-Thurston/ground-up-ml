@@ -29,4 +29,4 @@ jobs:
 
     - name: 🧪 Run tests
       run: |
-        pytest tests || echo "⚠️ Tests directory is empty or has placeholder tests"
+        PYTHONPATH=$(pwd)/src poetry run pytest
