@@ -17,7 +17,7 @@ import pandas as pd
 from sklearn.linear_model import LinearRegression, SGDRegressor
 
 from src.core.metrics.metrics import (
-    calculate_adjusted_r_squated,
+    calculate_adjusted_r_squared,
     calculate_mae,
     calculate_median_ae,
     calculate_mse,
@@ -291,7 +291,7 @@ class SimpleLinearRegressionSklearn(GroundUpMLBaseModel):
         self.mae = calculate_mae(self.y, y_pred)
         self.median_ae = calculate_median_ae(self.y, y_pred)
         self.r_squared = calculate_r_squared(self.y, y_pred)
-        self.adjusted_r_squared = calculate_adjusted_r_squated(self.y, y_pred)
+        self.adjusted_r_squared = calculate_adjusted_r_squared(self.y, y_pred)
 
     def _coefficient_estimators(
         self, x: pd.Series, y: pd.Series, n: int, methods: str = None

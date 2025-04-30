@@ -17,7 +17,7 @@ import torch
 import torch.nn as nn
 
 from src.core.metrics.metrics import (
-    calculate_adjusted_r_squated,
+    calculate_adjusted_r_squared,
     calculate_mae,
     calculate_median_ae,
     calculate_mse,
@@ -370,7 +370,7 @@ class SimpleLinearRegressionPyTorch(GroundUpMLBaseModel):
         self.mae = calculate_mae(y_actual, y_pred)
         self.median_ae = calculate_median_ae(y_actual, y_pred)
         self.r_squared = calculate_r_squared(y_actual, y_pred)
-        self.adjusted_r_squared = calculate_adjusted_r_squated(y_actual, y_pred)
+        self.adjusted_r_squared = calculate_adjusted_r_squared(y_actual, y_pred)
 
     def _coefficient_estimators(
         self, x: pd.Series, y: pd.Series, n: int, methods: str = None
