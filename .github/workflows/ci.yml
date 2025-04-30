@@ -28,4 +28,4 @@ jobs:
         python -m pip install --upgrade pip
 
     - name: 🧪 Run tests
-      run: poetry run pytest
+      run: PYTHONPATH=src poetry run pytest
