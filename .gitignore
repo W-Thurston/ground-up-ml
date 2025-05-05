@@ -182,3 +182,5 @@ cython_debug/
 
 # Workflow markdown
 workflow.md
+
+docs/learning_path/
