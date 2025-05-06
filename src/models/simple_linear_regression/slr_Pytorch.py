@@ -25,6 +25,7 @@ from src.core.metrics.metrics import (
     calculate_rmse,
 )
 from src.core.registry import register_model
+from src.data.generate_data import generate_singlevariate_synthetic_data_regression
 from src.models.ground_up_ml_base_model import GroundUpMLBaseModel
 from src.utils.utils import format_duration
 
@@ -85,7 +86,7 @@ class SimpleLinearRegressionPyTorch(GroundUpMLBaseModel):
     def name(self):
         return "SimpleLinearRegression-PyTorch"
 
-    def fit(self, X, y, method: str = None) -> None:
+    def fit(self, method: str = None) -> None:
         """
         Routing function to call specific coefficient estimator methods
 
@@ -458,17 +459,21 @@ class SimpleLinearRegressionPyTorch(GroundUpMLBaseModel):
             )
 
         else:
-            np.random.seed(seed)
             for n in n_samples_list:
                 # Generate synthetic data
-                x = pd.Series(2 * np.random.rand(n))
-                y = pd.Series(4 + 3 * x + np.random.randn(n) * noise)
+                x, y = generate_singlevariate_synthetic_data_regression(
+                    n=n, noise=noise, seed=seed
+                )
 
                 results.extend(self._coefficient_estimators(x, y, n, methods))
 
-        return pd.DataFrame(results).sort_values(
-            ["n_samples", "method", "duration_seconds"]
-        )
+        df = pd.DataFrame(results)
+        if not df.empty and all(
+            col in df.columns for col in ["n_samples", "method", "duration_seconds"]
+        ):
+            df = df.sort_values(["n_samples", "method", "duration_seconds"])
+
+        return df
 
     def summary(self) -> None:
         """

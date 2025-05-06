@@ -24,6 +24,7 @@ from src.core.metrics.metrics import (
     calculate_rmse,
 )
 from src.core.registry import register_model
+from src.data.generate_data import generate_singlevariate_synthetic_data_regression
 from src.models.ground_up_ml_base_model import GroundUpMLBaseModel
 from src.utils.config import get_config
 from src.utils.learning_rate import get_learning_rate_schedule
@@ -601,11 +602,11 @@ class SimpleLinearRegressionFromScratch(GroundUpMLBaseModel):
             )
 
         else:
-            np.random.seed(seed)
             for n in n_samples_list:
                 # Generate synthetic data
-                x = pd.Series(2 * np.random.rand(n))
-                y = 4 + 3 * x + np.random.randn(n) * noise
+                x, y = generate_singlevariate_synthetic_data_regression(
+                    n=n, noise=noise, seed=seed
+                )
 
                 results.extend(self._coefficient_estimators(x, y, n, methods))
 
