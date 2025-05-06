@@ -5,7 +5,7 @@ import argparse
 import pandas as pd
 
 from src.core.dispatcher import run_benchmarks
-from src.data.generate_data import generate_synthetic_data
+from src.data.generate_data import generate_singlevariate_synthetic_data_regression
 from src.utils.report import generate_report
 from src.visualizations.visualizations import plot_comparison_grid
 
@@ -21,7 +21,7 @@ def load_dataset(data_path: str = None):
         import numpy as np
 
         np.random.seed(42)
-        X, y = generate_synthetic_data(n=1000)
+        X, y = generate_singlevariate_synthetic_data_regression(n=1000)
 
     return X, y
 
