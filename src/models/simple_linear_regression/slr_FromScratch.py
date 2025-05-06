@@ -14,6 +14,7 @@ from typing import Optional
 import numpy as np
 import pandas as pd
 
+from src.config.defaults import DEFAULT_SCHEDULE_KWARGS, DEFAULT_TRAINING_KWARGS
 from src.core.metrics.metrics import (
     calculate_adjusted_r_squared,
     calculate_mae,
@@ -24,6 +25,8 @@ from src.core.metrics.metrics import (
 )
 from src.core.registry import register_model
 from src.models.ground_up_ml_base_model import GroundUpMLBaseModel
+from src.utils.config import get_config
+from src.utils.learning_rate import get_learning_rate_schedule
 from src.utils.utils import format_duration
 
 # from src.utils.mlflow_logger import log_metrics, log_params, start_run
@@ -33,8 +36,9 @@ from src.utils.utils import format_duration
 class SimpleLinearRegressionFromScratch(GroundUpMLBaseModel):
     """
     A Python implementation of Simple Linear Regression.
-    The interface of SimpleLinearRegressionFromScratch matches
-    SimpleLinearRegressionSklearn and SimpleLinearRegressionPyTorch.
+    The interface of SimpleLinearRegressionFromScratch derives from
+    GroundUpBaseModel and matches the Sklearn and Pytorch implementations
+    in this folder.
     """
 
     ALL_METHODS = [
@@ -72,35 +76,59 @@ class SimpleLinearRegressionFromScratch(GroundUpMLBaseModel):
     def name(self):
         return "SimpleLinearRegression-FromScratch"
 
-    def fit(self, X, y, method: str = None) -> None:
+    def fit(
+        self,
+        method: str = None,
+        schedule: str = None,
+        schedule_kwargs: dict = None,
+        training_kwargs: dict = None,
+    ) -> None:
         """
         Routing function to call specific coefficient estimator methods
 
         Args:
-            method (str, optional): Method to calculate coefficients.
-                Defaults to None.
+            method (str): Method to calculate coefficients.
+            schedule (str, optional): Learning rate schedule name.
+            schedule_kwargs (dict, optional): Schedule hyperparameters.
+            training_kwargs (dict, optional): Training loop hyperparameters.
 
         Raises:
             ValueError: Raise error if value in 'method' is not a known one.
         """
         self.method = method
+        schedule_kwargs = schedule_kwargs or {}
+        training_kwargs = training_kwargs or {}
 
-        fit_methods = {
-            "beta_estimations": self._fit_beta_estimations,
-            "normal_equation": self._fit_normal_equation,
-            "gradient_descent_batch": self._fit_gradient_descent_batch,
-            "gradient_descent_stochastic": self._fit_gradient_descent_stochastic,
-            "gradient_descent_mini_batch": self._fit_gradient_descent_mini_batch,
+        FIT_METHODS = {
+            "beta_estimations": (self._fit_beta_estimations, False),
+            "normal_equation": (self._fit_normal_equation, False),
+            "gradient_descent_batch": (self._fit_gradient_descent_batch, True),
+            "gradient_descent_stochastic": (
+                self._fit_gradient_descent_stochastic,
+                True,
+            ),
+            "gradient_descent_mini_batch": (
+                self._fit_gradient_descent_mini_batch,
+                True,
+            ),
         }
 
-        # Raise error if value in 'method' is not a known one
-        if method not in fit_methods:
+        if method not in FIT_METHODS:
             raise ValueError(
-                f"Unknown method '{method}' for SimpleLinearRegressionFromScratch."
+                f"Unknown method '{method}' for SimpleLinearRegressionFromScratch. "
+                f"Choose one of: {list(FIT_METHODS.keys())}"
             )
 
-        # Call respective coefficient estimator
-        fit_methods[method]()
+        fit_method, accepts_schedules = FIT_METHODS[method]
+        if accepts_schedules:
+            schedule_name = schedule or "time_decay"
+            fit_method(
+                schedule_name=schedule_name,
+                schedule_kwargs=schedule_kwargs,
+                training_kwargs=training_kwargs,
+            )
+        else:
+            fit_method()
 
     def _fit_beta_estimations(self) -> None:
         """
@@ -141,12 +169,27 @@ class SimpleLinearRegressionFromScratch(GroundUpMLBaseModel):
 
         self.diagnostics = {}  # No dynamics for closed-form method
 
-    def _fit_gradient_descent_batch(self) -> None:
+    def _fit_gradient_descent_batch(
+        self,
+        schedule_name="time_decay",
+        schedule_kwargs=None,
+        training_kwargs=None,
+    ) -> None:
         """
         Fits the model using batch gradient descent.
         Minimizes the MSE cost function by iteratively updating θ (theta).
 
-        Gradient: ∂/∂θ J(θ) = 2/m * Xᵀ(Xθ - y)
+        Gradient: ∂J(θ)/∂θ = (2/m) ⋅ Xᵀ(Xθ - y)
+
+        Args:
+            schedule_name (str): Name of the learning rate schedule.
+            schedule_kwargs (dict): Hyperparameters for the learning rate scheduler.
+            training_kwargs (dict): Hyperparameters for training loop, e.g.:
+                - max_epochs (int): Maximum number of passes through data
+                - convergence_tol (float): Threshold for stopping early
+                - theta_init_scale (float): Variance scale for initial theta
+                - verbose (bool): Whether to print convergence updates
+                - batch_size (int, optional): Only for mini-batch
         """
 
         # Add intercept column
@@ -154,26 +197,32 @@ class SimpleLinearRegressionFromScratch(GroundUpMLBaseModel):
         X_b = np.c_[np.ones((m, 1)), self.x]
         y = self.y.reshape(-1, 1)  # ensure shape (m, 1)
 
-        eta_0 = 0.1  # Initial learning rate
-        decay_rate = 0.01  # Controls how fast learning rate decreases
-        n_iterations = 1000
-        tolerance = 1e-6
+        # Set learning rate schedule function
+        schedule_kwargs = get_config(
+            schedule_kwargs, DEFAULT_SCHEDULE_KWARGS.get(schedule_name, {})
+        )
+        schedule = get_learning_rate_schedule(schedule_name, **schedule_kwargs)
+
+        # Set hyperparameters
+        training_kwargs = get_config(training_kwargs, DEFAULT_TRAINING_KWARGS)
+        max_epochs = training_kwargs["max_epochs"]
+        convergence_tol = training_kwargs["convergence_tol"]
+        theta_init_scale = training_kwargs["theta_init_scale"]
+        verbose = training_kwargs["verbose"]
 
         # Initialize parameters randomly
-        theta_hat = np.random.randn(2, 1) * 0.01
-        prev_theta = theta_hat.copy()
-
+        theta_hat = np.random.randn(2, 1) * theta_init_scale
         cost_history = []
 
-        for iteration in range(n_iterations):
+        for epoch in range(max_epochs):
             # Learning rate decay
-            eta_t = eta_0 / (1 + decay_rate * iteration)
+            eta = schedule(epoch)
 
             # Calculate gradient
             gradients = (2 / m) * X_b.T @ ((X_b @ theta_hat) - y)
 
-            # Home much to update theta_hat by
-            update = eta_t * gradients
+            # How much to update theta_hat by
+            update = eta * gradients
 
             # Update theta_hat
             theta_hat -= update
@@ -183,21 +232,34 @@ class SimpleLinearRegressionFromScratch(GroundUpMLBaseModel):
             cost_history.append(cost)
 
             # Convergence check
-            if np.linalg.norm(theta_hat - prev_theta) < tolerance:
-                print(f"[✔] Converged at iteration {iteration}")
+            if np.linalg.norm(update) < convergence_tol:
+                if verbose:
+                    print(f"[✔] Converged at epoch {epoch}")
+                    print(
+                        f"[ℹ️] Using schedule '{schedule_name}' with: {schedule_kwargs}"
+                    )
                 break
-
-            # Update previous theta for convergence checks
-            prev_theta = theta_hat.copy()
 
         # Unpack final parameters
         self.beta_0_hat = theta_hat[0, 0]
         self.beta_1_hat = theta_hat[1, 0]
 
-        self.diagnostics = {"cost_history": cost_history}
+        self.diagnostics = {
+            "cost_history": cost_history,
+            "epochs_run": epoch + 1,
+            "schedule": schedule_name,
+            "schedule_kwargs": schedule_kwargs,
+            "training_kwargs": training_kwargs,
+            "final_eta": eta,
+            "converged": epoch < max_epochs - 1,
+            "theta_hat": theta_hat.ravel(),
+        }
 
     def _fit_gradient_descent_stochastic(
-        self, t0: int = 5, t1: int = 50, n_epochs: int = 50, tolerance: float = 1e-6
+        self,
+        schedule_name="time_decay",
+        schedule_kwargs=None,
+        training_kwargs=None,
     ) -> None:
         """
         Fits the model using stochastic gradient descent (SGD) with a
@@ -207,11 +269,14 @@ class SimpleLinearRegressionFromScratch(GroundUpMLBaseModel):
         randomly shuffled sample per step.
 
         Args:
-            t0 (int, optional): _description_. Defaults to 5.
-            t1 (int, optional): _description_. Defaults to 50.
-            n_epochs (int, optional): _description_. Defaults to 50.
-            tolerance (float, optional): _description_. Defaults to 1e-6.
-
+            schedule_name (str): Name of the learning rate schedule.
+            schedule_kwargs (dict): Hyperparameters for the learning rate scheduler.
+            training_kwargs (dict): Hyperparameters for training loop, e.g.:
+                - max_epochs (int): Maximum number of passes through data
+                - convergence_tol (float): Threshold for stopping early
+                - theta_init_scale (float): Variance scale for initial theta
+                - verbose (bool): Whether to print convergence updates
+                - batch_size (int, optional): Only for mini-batch
         """
 
         # Add intercept column
@@ -219,15 +284,26 @@ class SimpleLinearRegressionFromScratch(GroundUpMLBaseModel):
         X_b = np.c_[np.ones((m, 1)), self.x]
         y = self.y.reshape(-1, 1)  # ensure shape (m, 1)
 
-        # Random initialization
-        theta_hat = np.random.randn(2, 1) * 0.01
+        # Set learning rate schedule function
+        schedule_kwargs = get_config(
+            schedule_kwargs, DEFAULT_SCHEDULE_KWARGS.get(schedule_name, {})
+        )
+        schedule = get_learning_rate_schedule(schedule_name, **schedule_kwargs)
+
+        # Set hyperparameters
+        training_kwargs = get_config(training_kwargs, DEFAULT_TRAINING_KWARGS)
+        max_epochs = training_kwargs["max_epochs"]
+        convergence_tol = training_kwargs["convergence_tol"]
+        theta_init_scale = training_kwargs["theta_init_scale"]
+        verbose = training_kwargs["verbose"]
+
+        # Initialize parameters randomly
+        theta_hat = np.random.randn(2, 1) * theta_init_scale
         t = 0
+
         cost_history = []
 
-        def learning_schedule(t):
-            return t0 / (t + t1)
-
-        for epoch in range(n_epochs):
+        for epoch in range(max_epochs):
 
             # Shuffle the order of observations each epoch
             indices = np.random.permutation(m)
@@ -240,7 +316,7 @@ class SimpleLinearRegressionFromScratch(GroundUpMLBaseModel):
                 gradients = 2 * xi.T @ ((xi @ theta_hat) - yi)
 
                 # Learning rate decay
-                eta = learning_schedule(t)
+                eta = schedule(t)
 
                 # Home much to update theta_hat by
                 update = eta * gradients
@@ -253,8 +329,13 @@ class SimpleLinearRegressionFromScratch(GroundUpMLBaseModel):
                 cost_history.append(cost)
 
                 # Convergence check
-                if np.linalg.norm(update) < tolerance:
-                    # print(f"[✔] SGD converged at epoch {epoch}, sample {i}, t={t}")
+                if np.linalg.norm(update) < convergence_tol:
+                    if verbose:
+                        print(f"[✔] Converged at epoch {epoch}")
+                        print(
+                            f"[ℹ️] Using schedule '{schedule_name}' with:"
+                            f" {schedule_kwargs}"
+                        )
                     break
                 t += 1  # count each update step for learning rate decay
 
@@ -262,31 +343,36 @@ class SimpleLinearRegressionFromScratch(GroundUpMLBaseModel):
         self.beta_0_hat = theta_hat[0, 0]
         self.beta_1_hat = theta_hat[1, 0]
 
-        self.diagnostics = {"cost_history": cost_history}
+        self.diagnostics = {
+            "cost_history": cost_history,
+            "epochs_run": epoch + 1,
+            "schedule": schedule_name,
+            "schedule_kwargs": schedule_kwargs,
+            "training_kwargs": training_kwargs,
+            "final_eta": eta,
+            "converged": epoch < max_epochs - 1,
+            "theta_hat": theta_hat.ravel(),
+        }
 
     def _fit_gradient_descent_mini_batch(
         self,
-        batch_size: int = 16,
-        eta_0: float = 0.1,
-        decay_rate: float = 0.01,
-        n_epochs: int = 50,
-        tolerance: float = 1e-6,
+        schedule_name="time_decay",
+        schedule_kwargs=None,
+        training_kwargs=None,
     ) -> None:
         """
         Fits the model using mini-batch gradient descent with a decaying learning rate.
         Each epoch processes randomly shuffled mini-batches of the training data.
 
         Args:
-            batch_size (int, optional): Number of samples per mini-batch.
-                Defaults to 16.
-            eta_0 (float, optional): Initial learning rate.
-                Defaults to 0.1.
-            decay_rate (float, optional): Controls how quickly eta decays.
-                Defaults to 0.01.
-            n_epochs (int, optional): Number of passes through the data.
-                Defaults to 50.
-            tolerance (float, optional): Threshold for stopping based on
-                parameter stability. Defaults to 1e-6.
+            schedule_name (str): Name of the learning rate schedule.
+            schedule_kwargs (dict): Hyperparameters for the learning rate scheduler.
+            training_kwargs (dict): Hyperparameters for training loop, e.g.:
+                - max_epochs (int): Maximum number of passes through data
+                - convergence_tol (float): Threshold for stopping early
+                - theta_init_scale (float): Variance scale for initial theta
+                - verbose (bool): Whether to print convergence updates
+                - batch_size (int, optional): Only for mini-batch
         """
 
         # Add intercept column
@@ -294,12 +380,27 @@ class SimpleLinearRegressionFromScratch(GroundUpMLBaseModel):
         X_b = np.c_[np.ones((m, 1)), self.x]
         y = self.y.reshape(-1, 1)
 
-        # Random initialization
-        theta_hat = np.random.randn(2, 1) * 0.01
+        # Set learning rate schedule function
+        schedule_kwargs = get_config(
+            schedule_kwargs, DEFAULT_SCHEDULE_KWARGS.get(schedule_name, {})
+        )
+        schedule = get_learning_rate_schedule(schedule_name, **schedule_kwargs)
+
+        # Set hyperparameters
+        training_kwargs = get_config(training_kwargs, DEFAULT_TRAINING_KWARGS)
+        max_epochs = training_kwargs["max_epochs"]
+        batch_size = training_kwargs["batch_size"]
+        convergence_tol = training_kwargs["convergence_tol"]
+        theta_init_scale = training_kwargs["theta_init_scale"]
+        verbose = training_kwargs["verbose"]
+
+        # Initialize parameters randomly
+        theta_hat = np.random.randn(2, 1) * theta_init_scale
         t = 0
+
         cost_history = []
 
-        for epoch in range(n_epochs):
+        for epoch in range(max_epochs):
 
             # Shuffle order of observations for each epoch
             indices = np.random.permutation(m)
@@ -313,10 +414,10 @@ class SimpleLinearRegressionFromScratch(GroundUpMLBaseModel):
                 gradients = (2 / len(X_mini)) * X_mini.T @ (X_mini @ theta_hat - y_mini)
 
                 # Learning decay rate
-                eta_t = eta_0 / (1 + decay_rate * t)
+                eta = schedule(t)
 
                 # How much to update theta_hat by
-                update = eta_t * gradients
+                update = eta * gradients
 
                 # Update theta_hat
                 theta_hat -= update
@@ -326,11 +427,13 @@ class SimpleLinearRegressionFromScratch(GroundUpMLBaseModel):
                 cost_history.append(cost)
 
                 # Convergence check
-                if np.linalg.norm(update) < tolerance:
-                    print(
-                        f"[✔] Mini-batch GD converged at epoch {epoch}, "
-                        f"batch {i // batch_size}, t={t}"
-                    )
+                if np.linalg.norm(update) < convergence_tol:
+                    if verbose:
+                        print(f"[✔] Converged at epoch {epoch}")
+                        print(
+                            f"[ℹ️] Using schedule '{schedule_name}' with:"
+                            f" {schedule_kwargs}"
+                        )
                     break
                 t += 1  # count each update step for learning rate decay
 
@@ -338,9 +441,18 @@ class SimpleLinearRegressionFromScratch(GroundUpMLBaseModel):
         self.beta_0_hat = theta_hat[0, 0]
         self.beta_1_hat = theta_hat[1, 0]
 
-        self.diagnostics = {"cost_history": cost_history}
+        self.diagnostics = {
+            "cost_history": cost_history,
+            "epochs_run": epoch + 1,
+            "schedule": schedule_name,
+            "schedule_kwargs": schedule_kwargs,
+            "training_kwargs": training_kwargs,
+            "final_eta": eta,
+            "converged": epoch < max_epochs - 1,
+            "theta_hat": theta_hat.ravel(),
+        }
 
-    def predict(self, x_new: pd.Series = None):
+    def predict(self, x_new: pd.Series = None) -> np.ndarray:
         """
         Calculate predicted values based on learned Simple Linear Regression training
 
@@ -349,11 +461,19 @@ class SimpleLinearRegressionFromScratch(GroundUpMLBaseModel):
                 Defaults to None.
 
         Returns:
-            float: Predicted value of x_new's 'y' value
+            np.ndarray: Predicted values corresponding to x_new
         """
         if x_new is None:
-            x_new = self.x
-        return self.beta_0_hat + self.beta_1_hat * x_new
+            x = self.x  # already 1D np.ndarray in __init__
+        else:
+            if isinstance(x_new, pd.Series):
+                x = x_new.to_numpy()
+            elif isinstance(x_new, pd.DataFrame):
+                x = x_new.iloc[:, 0].to_numpy()
+            else:
+                x = np.array(x_new).flatten()
+
+        return self.beta_0_hat + self.beta_1_hat * x
 
     def residuals(self) -> float:
         """
@@ -391,13 +511,23 @@ class SimpleLinearRegressionFromScratch(GroundUpMLBaseModel):
         """
 
         coeff_results = []
-        methods = methods or SimpleLinearRegressionFromScratch.ALL_METHODS
 
         for method in methods:
             model = SimpleLinearRegressionFromScratch(x, y)
             try:
+                accepts_schedule = "gradient_descent" in method
                 start_time = time.perf_counter()
-                model.fit(method=method)
+
+                if accepts_schedule:
+                    model.fit(
+                        method=method,
+                        schedule="time_decay",
+                        schedule_kwargs={},
+                        training_kwargs={},
+                    )
+                else:
+                    model.fit(method=method)
+
                 duration = time.perf_counter() - start_time
                 formatted_time = format_duration(duration)
 
@@ -426,9 +556,12 @@ class SimpleLinearRegressionFromScratch(GroundUpMLBaseModel):
                     {
                         "n_samples": n,
                         "method": method,
+                        "mse": model.mse,
                         "rmse": model.rmse,
                         "mae": model.mae,
+                        "median_ae": model.median_ae,
                         "r_squared": model.r_squared,
+                        "adjusted_r_squared": model.adjusted_r_squared,
                         "beta_0": model.beta_0_hat,
                         "beta_1": model.beta_1_hat,
                         "duration_seconds": duration,
@@ -447,7 +580,7 @@ class SimpleLinearRegressionFromScratch(GroundUpMLBaseModel):
         n_samples_list: list = [10, 100, 1000],
         noise: float = 1.0,
         seed: int = 42,
-        methods=None,
+        methods: list = None,
     ) -> pd.DataFrame:
         """
         Run all coefficient estimation methods on datasets of varying sample sizes.
@@ -457,6 +590,7 @@ class SimpleLinearRegressionFromScratch(GroundUpMLBaseModel):
         """
 
         results = []
+        methods = methods or self.ALL_METHODS
 
         if data is not None and "x" in data and "y" in data:
             x = data["x"]
@@ -475,17 +609,30 @@ class SimpleLinearRegressionFromScratch(GroundUpMLBaseModel):
 
                 results.extend(self._coefficient_estimators(x, y, n, methods))
 
-        return pd.DataFrame(results).sort_values(
-            ["n_samples", "method", "duration_seconds"]
-        )
+        df = pd.DataFrame(results)
+        if not df.empty and all(
+            col in df.columns for col in ["n_samples", "method", "duration_seconds"]
+        ):
+            df = df.sort_values(["n_samples", "method", "duration_seconds"])
+
+        return df
 
     def summary(self) -> None:
         """
         Print a summary of the fitted model coefficients and metrics.
         """
-        print(f"Method: {self.method}")
+        print("\n[Model Summary]")
+        print(f"Method: {self.method}\n")
         print(f"Intercept (β₀): {self.beta_0_hat:.4f}")
-        print(f"Slope (β₁): {self.beta_1_hat:.4f}")
+        print(f"Slope     (β₁): {self.beta_1_hat:.4f}\n")
+
+        print("[Metrics]")
+        print(f"MSE: {self.mse:.4f}")
+        print(f"RMSE: {self.rmse:.4f}")
+        print(f"MAE: {self.mae:.4f}")
+        print(f"Median AE: {self.median_ae:.4f}")
+        print(f"R²: {self.r_squared:.4f}")
+        print(f"Adjusted R²: {self.adjusted_r_squared:.4f}")
         print()
 
     def benchmark_summary(self) -> pd.DataFrame:
