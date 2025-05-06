@@ -5,6 +5,7 @@ import time
 import pandas as pd
 from tqdm import tqdm
 
+from src.config.defaults import DEFAULT_SCHEDULE_NAME
 from src.core.registry import MODEL_REGISTRY
 from src.models.multivariate_linear_regression import mlr_FromScratch  # noqa: F401;
 
@@ -33,6 +34,13 @@ def run_benchmarks(pairs: list[tuple[str, str]], X: pd.Series, y: pd.Series) -> 
     """
     results = {}
 
+    filtered_pairs = [
+        (model, method_name)
+        for model, method_name in pairs
+        if method_name in getattr(MODEL_REGISTRY[model]["class"], "ALL_METHODS", [])
+    ]
+    pairs = filtered_pairs
+
     with tqdm(total=len(pairs), ncols=100) as pbar:
         for model_name, method_name in pairs:
 
@@ -51,9 +59,9 @@ def run_benchmarks(pairs: list[tuple[str, str]], X: pd.Series, y: pd.Series) -> 
             if uses_gd:
                 fit_args.update(
                     {
-                        "schedule": "time_decay",
-                        "schedule_kwargs": {},  # or from config
-                        "training_kwargs": {},  # or from config
+                        "schedule": DEFAULT_SCHEDULE_NAME,
+                        "schedule_kwargs": {},
+                        "training_kwargs": {},
                     }
                 )
             try:
