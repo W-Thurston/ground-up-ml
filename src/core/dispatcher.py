@@ -16,9 +16,6 @@ from src.models.simple_linear_regression import (  # noqa: F401
     slr_Sklearn,
 )
 
-# import src.models.simple_linear_regression.  # noqa: F401
-# import src.models.simple_linear_regression.  # noqa: F401
-
 
 def run_benchmarks(pairs: list[tuple[str, str]], X: pd.Series, y: pd.Series) -> dict:
     """

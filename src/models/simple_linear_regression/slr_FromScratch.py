@@ -36,7 +36,7 @@ from src.utils.utils import format_duration
 # from src.utils.mlflow_logger import log_metrics, log_params, start_run
 
 
-@register_model("from_scratch", task_type="regression", group="simple_linear")
+@register_model("slr_from_scratch", task_type="regression", group="simple_linear")
 class SimpleLinearRegressionFromScratch(GroundUpMLBaseModel):
     """
     A Python implementation of Simple Linear Regression.
