@@ -16,6 +16,7 @@ import pandas as pd
 import torch
 import torch.nn as nn
 
+from src.config.defaults import DEFAULT_TRAINING_KWARGS_PYTORCH
 from src.core.metrics.metrics import (
     calculate_adjusted_r_squared,
     calculate_mae,
@@ -27,6 +28,7 @@ from src.core.metrics.metrics import (
 from src.core.registry import register_model
 from src.data.generate_data import generate_singlevariate_synthetic_data_regression
 from src.models.ground_up_ml_base_model import GroundUpMLBaseModel
+from src.utils.config import get_config, safe_kwargs
 from src.utils.utils import format_duration
 
 # from src.utils.visualizations import plot_model_diagnostics
@@ -86,7 +88,13 @@ class SimpleLinearRegressionPyTorch(GroundUpMLBaseModel):
     def name(self):
         return "SimpleLinearRegression-PyTorch"
 
-    def fit(self, method: str = None) -> None:
+    def fit(
+        self,
+        method: str = None,
+        schedule: str = None,
+        schedule_kwargs: dict = None,
+        training_kwargs: dict = None,
+    ) -> None:
         """
         Routing function to call specific coefficient estimator methods
 
@@ -97,23 +105,38 @@ class SimpleLinearRegressionPyTorch(GroundUpMLBaseModel):
             ValueError: If the method is not a known option.
         """
         self.method = method
+        schedule_kwargs = schedule_kwargs or {}
+        training_kwargs = training_kwargs or {}
 
-        fit_methods = {
-            "beta_estimations": self._fit_beta_estimations,
-            "normal_equation": self._fit_normal_equation,
-            "gradient_descent_batch": self._fit_gradient_descent_batch,
-            "gradient_descent_stochastic": self._fit_gradient_descent_stochastic,
-            "gradient_descent_mini_batch": self._fit_gradient_descent_mini_batch,
+        FIT_METHODS = {
+            "beta_estimations": (self._fit_beta_estimations, False),
+            "normal_equation": (self._fit_normal_equation, False),
+            "gradient_descent_batch": (self._fit_gradient_descent_batch, True),
+            "gradient_descent_stochastic": (
+                self._fit_gradient_descent_stochastic,
+                True,
+            ),
+            "gradient_descent_mini_batch": (
+                self._fit_gradient_descent_mini_batch,
+                True,
+            ),
         }
 
         # Raise error if value in 'method' is not a known one
-        if method not in fit_methods:
+        if method not in FIT_METHODS:
             raise ValueError(
                 f"Unknown method '{method}' for SimpleLinearRegressionPyTorch."
+                f"Choose one of: {list(FIT_METHODS.keys())}"
             )
 
         # Call respective coefficient estimator
-        fit_methods[method]()
+        fit_method, accepts_schedules = FIT_METHODS[method]
+        if accepts_schedules:
+            fit_method(
+                training_kwargs=training_kwargs,
+            )
+        else:
+            fit_method()
 
     def _fit_beta_estimations(self) -> None:
         """
@@ -153,26 +176,37 @@ class SimpleLinearRegressionPyTorch(GroundUpMLBaseModel):
 
         self.diagnostics = {}  # No dynamics for closed-form method
 
-    def _fit_gradient_descent_batch(self, n_epochs: int = 50, lr: float = 0.05) -> None:
+    def _fit_gradient_descent_batch(
+        self,
+        training_kwargs=None,
+    ) -> None:
         """
         Fits the model using batch gradient descent.
 
         Args:
-            n_epochs (int, optional): Number of iterations. Defaults to 50.
-            lr (float, optional): Learning rate. Defaults to 0.01.
+            training_kwargs (dict): Hyperparameters for training loop, e.g.:
+                - max_epochs (int): Maximum number of passes through data
+                - learning_rate (float): Learning rate for gradient steps
         """
         # Re-initialize model freshly
         self.model = nn.Linear(1, 1)
         nn.init.normal_(self.model.weight, mean=0.0, std=0.01)
         nn.init.zeros_(self.model.bias)
 
+        # Set hyperparameters
+        training_kwargs = get_config(training_kwargs, DEFAULT_TRAINING_KWARGS_PYTORCH)
+        max_epochs = training_kwargs["max_epochs"]
+
+        # Remove keys not accepted by SGD
+        optimizer_kwargs = safe_kwargs(torch.optim.SGD, training_kwargs)
+
         # Initialize loss function and optimizer
         self.loss_fn = nn.MSELoss()
-        self.optimizer = torch.optim.SGD(self.model.parameters(), lr=lr)
+        self.optimizer = torch.optim.SGD(self.model.parameters(), **optimizer_kwargs)
 
         cost_history = []
 
-        for epoch in range(n_epochs):
+        for epoch in range(max_epochs):
             # 1. Forward pass
             y_pred = self.model(self.x)  # 1a. Compute predictions
             loss = self.loss_fn(y_pred, self.y)  # 1b. Calculate Loss
@@ -193,31 +227,43 @@ class SimpleLinearRegressionPyTorch(GroundUpMLBaseModel):
             self.beta_0_hat = self.model.bias[0].detach().cpu().item()
 
         # 6. Populate diagnostic dict
-        self.diagnostics = {"cost_history": cost_history}
+        self.diagnostics = {
+            "cost_history": cost_history,
+            "training_kwargs": training_kwargs,
+        }
 
     def _fit_gradient_descent_stochastic(
-        self, n_epochs: int = 50, lr: float = 0.05
+        self,
+        training_kwargs=None,
     ) -> None:
         """
         Fits the model using stochastic gradient descent.
 
         Args:
-            n_epochs (int, optional): Number of iterations. Defaults to 50.
-            lr (float, optional): Learning rate. Defaults to 0.01.
+            training_kwargs (dict): Hyperparameters for training loop, e.g.:
+                - max_epochs (int): Maximum number of passes through data
+                - learning_rate (float): Learning rate for gradient steps
         """
         # Re-initialize model freshly
         self.model = nn.Linear(1, 1)
         nn.init.normal_(self.model.weight, mean=0.0, std=0.01)
         nn.init.zeros_(self.model.bias)
 
+        # Set hyperparameters
+        training_kwargs = get_config(training_kwargs, DEFAULT_TRAINING_KWARGS_PYTORCH)
+        max_epochs = training_kwargs["max_epochs"]
+
+        # Remove keys not accepted by SGD
+        optimizer_kwargs = safe_kwargs(torch.optim.SGD, training_kwargs)
+
         # Initialize loss function and optimizer
         self.loss_fn = nn.MSELoss()
-        self.optimizer = torch.optim.SGD(self.model.parameters(), lr=lr)
+        self.optimizer = torch.optim.SGD(self.model.parameters(), **optimizer_kwargs)
 
         m = self.x.shape[0]
         cost_history = []
 
-        for epoch in range(n_epochs):
+        for epoch in range(max_epochs):
             # Shuffle the order of observations each epoch
             indices = torch.randperm(m)
             for i in indices:
@@ -249,33 +295,46 @@ class SimpleLinearRegressionPyTorch(GroundUpMLBaseModel):
             self.beta_0_hat = self.model.bias[0].detach().cpu().item()
 
         # 6. Populate diagnostic dict
-        self.diagnostics = {"cost_history": cost_history}
+        self.diagnostics = {
+            "cost_history": cost_history,
+            "training_kwargs": training_kwargs,
+        }
 
     def _fit_gradient_descent_mini_batch(
-        self, n_epochs: int = 50, batch_size: int = 32, lr: float = 0.05
+        self,
+        training_kwargs=None,
     ) -> None:
         """
         Fits the model using mini-batch gradient descent.
 
         Args:
-            n_epochs (int, optional): Number of iterations. Defaults to 50.
-            batch_size (int, optional): Size of each mini-batch. Defaults to 32.
-            lr (float, optional): Learning rate. Defaults to 0.01.
+            training_kwargs (dict): Hyperparameters for training loop, e.g.:
+                - max_epochs (int): Maximum number of passes through data
+                - learning_rate (float): Learning rate for gradient steps
+                - batch_size (int, optional): Only for mini-batch
         """
         # Re-initialize model freshly
         self.model = nn.Linear(1, 1)
         nn.init.normal_(self.model.weight, mean=0.0, std=0.01)
         nn.init.zeros_(self.model.bias)
 
+        # Set hyperparameters
+        training_kwargs = get_config(training_kwargs, DEFAULT_TRAINING_KWARGS_PYTORCH)
+        max_epochs = training_kwargs["max_epochs"]
+        batch_size = training_kwargs["batch_size"]
+
+        # Remove keys not accepted by SGD
+        optimizer_kwargs = safe_kwargs(torch.optim.SGD, training_kwargs)
+
         # Initialize loss function and optimizer
         self.loss_fn = nn.MSELoss()
-        self.optimizer = torch.optim.SGD(self.model.parameters(), lr=lr)
+        self.optimizer = torch.optim.SGD(self.model.parameters(), **optimizer_kwargs)
 
         m = self.x.shape[0]
 
         cost_history = []
 
-        for epoch in range(n_epochs):
+        for epoch in range(max_epochs):
 
             # Shuffle order of observations for each epoch
             indices = torch.randperm(m)
@@ -310,7 +369,10 @@ class SimpleLinearRegressionPyTorch(GroundUpMLBaseModel):
             self.beta_0_hat = self.model.bias[0].detach().cpu().item()
 
         # 6. Populate diagnostic dict
-        self.diagnostics = {"cost_history": cost_history}
+        self.diagnostics = {
+            "cost_history": cost_history,
+            "training_kwargs": training_kwargs,
+        }
 
     def predict(self, X: Optional[pd.Series] = None) -> np.ndarray:
         """
@@ -384,13 +446,23 @@ class SimpleLinearRegressionPyTorch(GroundUpMLBaseModel):
         """
 
         coeff_results = []
-        methods = methods or SimpleLinearRegressionPyTorch.ALL_METHODS
 
         for method in methods:
             model = SimpleLinearRegressionPyTorch(x, y)
             try:
+                accepts_schedule = "gradient_descent" in method
                 start_time = time.perf_counter()
-                model.fit(method=method)
+
+                if accepts_schedule:
+                    model.fit(
+                        method=method,
+                        schedule="time_decay",
+                        schedule_kwargs={},
+                        training_kwargs={},
+                    )
+                else:
+                    model.fit(method=method)
+
                 duration = time.perf_counter() - start_time
                 formatted_time = format_duration(duration)
 
@@ -419,9 +491,12 @@ class SimpleLinearRegressionPyTorch(GroundUpMLBaseModel):
                     {
                         "n_samples": n,
                         "method": method,
+                        "mse": model.mse,
                         "rmse": model.rmse,
                         "mae": model.mae,
+                        "median_ae": model.median_ae,
                         "r_squared": model.r_squared,
+                        "adjusted_r_squared": model.adjusted_r_squared,
                         "beta_0": model.beta_0_hat,
                         "beta_1": model.beta_1_hat,
                         "duration_seconds": duration,
@@ -449,6 +524,7 @@ class SimpleLinearRegressionPyTorch(GroundUpMLBaseModel):
             pd.DataFrame: Benchmark results.
         """
         results = []
+        methods = methods or self.ALL_METHODS
 
         if data is not None and "x" in data and "y" in data:
             x = data["x"].to_numpy()
@@ -477,13 +553,20 @@ class SimpleLinearRegressionPyTorch(GroundUpMLBaseModel):
 
     def summary(self) -> None:
         """
-        Print a summary of model parameters and diagnostics.
+        Print a summary of the fitted model coefficients and metrics.
         """
-        print(f"Method: {self.method}")
+        print("\n[Model Summary]")
+        print(f"Method: {self.method}\n")
         print(f"Intercept (β₀): {self.beta_0_hat:.4f}")
-        print(f"Slope (β₁): {self.beta_1_hat:.4f}")
-        if self.r_squared is not None:
-            print(f"R²: {self.r_squared:.4f}")
+        print(f"Slope     (β₁): {self.beta_1_hat:.4f}\n")
+
+        print("[Metrics]")
+        print(f"MSE: {self.mse:.4f}")
+        print(f"RMSE: {self.rmse:.4f}")
+        print(f"MAE: {self.mae:.4f}")
+        print(f"Median AE: {self.median_ae:.4f}")
+        print(f"R²: {self.r_squared:.4f}")
+        print(f"Adjusted R²: {self.adjusted_r_squared:.4f}")
         print()
 
     def benchmark_summary(self) -> pd.DataFrame:

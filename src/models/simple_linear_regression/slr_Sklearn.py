@@ -16,6 +16,7 @@ import numpy as np
 import pandas as pd
 from sklearn.linear_model import LinearRegression, SGDRegressor
 
+from src.config.defaults import DEFAULT_TRAINING_KWARGS_SKLEARN
 from src.core.metrics.metrics import (
     calculate_adjusted_r_squared,
     calculate_mae,
@@ -27,6 +28,7 @@ from src.core.metrics.metrics import (
 from src.core.registry import register_model
 from src.data.generate_data import generate_singlevariate_synthetic_data_regression
 from src.models.ground_up_ml_base_model import GroundUpMLBaseModel
+from src.utils.config import get_config, safe_kwargs
 from src.utils.utils import format_duration
 
 
@@ -83,7 +85,13 @@ class SimpleLinearRegressionSklearn(GroundUpMLBaseModel):
     def name(self):
         return "SimpleLinearRegression-Sklearn"
 
-    def fit(self, method: str = None) -> None:
+    def fit(
+        self,
+        method: str = None,
+        schedule: str = None,
+        schedule_kwargs: dict = None,
+        training_kwargs: dict = None,
+    ) -> None:
         """
         Routing function to call specific coefficient estimator methods
 
@@ -95,22 +103,37 @@ class SimpleLinearRegressionSklearn(GroundUpMLBaseModel):
             ValueError: Raise error if value in 'method' is not a known one.
         """
         self.method = method
+        schedule_kwargs = schedule_kwargs or {}
+        training_kwargs = training_kwargs or {}
 
-        fit_methods = {
-            "normal_equation": self._fit_normal_equation,
-            "gradient_descent_batch": self._fit_gradient_descent_batch,
-            "gradient_descent_stochastic": self._fit_gradient_descent_stochastic,
-            "gradient_descent_mini_batch": self._fit_gradient_descent_mini_batch,
+        FIT_METHODS = {
+            "normal_equation": (self._fit_normal_equation, False),
+            "gradient_descent_batch": (self._fit_gradient_descent_batch, True),
+            "gradient_descent_stochastic": (
+                self._fit_gradient_descent_stochastic,
+                True,
+            ),
+            "gradient_descent_mini_batch": (
+                self._fit_gradient_descent_mini_batch,
+                True,
+            ),
         }
 
         # Raise error if value in 'method' is not a known one
-        if method not in fit_methods:
+        if method not in FIT_METHODS:
             raise ValueError(
                 f"Unknown method '{method}' for SimpleLinearRegressionSklearn."
+                f"Choose one of: {list(FIT_METHODS.keys())}"
             )
 
-        # Call respective coefficent estimator
-        fit_methods[method]()
+        # Call respective coefficient estimator
+        fit_method, accepts_schedules = FIT_METHODS[method]
+        if accepts_schedules:
+            fit_method(
+                training_kwargs=training_kwargs,
+            )
+        else:
+            fit_method()
 
     def _fit_normal_equation(self) -> None:
         """
@@ -125,7 +148,7 @@ class SimpleLinearRegressionSklearn(GroundUpMLBaseModel):
 
     def _fit_gradient_descent_batch(
         self,
-        n_epochs: int = 50,
+        training_kwargs: dict = None,
     ) -> None:
         """
         Fits the model using batch gradient descent.
@@ -134,24 +157,23 @@ class SimpleLinearRegressionSklearn(GroundUpMLBaseModel):
         Parameters are updated after each epoch.
 
         Args:
-            n_epochs (int, optional): Number of iterations over the data.
-                Defaults to 50.
-
+            training_kwargs (dict): Hyperparameters for training loop
+                Defaults to None.
         """
+        training_kwargs = get_config(training_kwargs, DEFAULT_TRAINING_KWARGS_SKLEARN)
+
+        # Pull out values you use directly
+        max_epochs = training_kwargs.get("max_epochs", 50)
+
+        # Clean kwargs to only pass what SGDRegressor accepts
+        sgd_kwargs = safe_kwargs(SGDRegressor, training_kwargs)
+
+        self.model = SGDRegressor(**sgd_kwargs)
+
         cost_history = []
 
-        self.model = SGDRegressor(
-            loss="squared_error",
-            learning_rate="invscaling",
-            shuffle=False,
-            random_state=42,
-            tol=None,
-            warm_start=True,
-        )
-
-        for epoch in range(n_epochs):
+        for epoch in range(max_epochs):
             self.model.partial_fit(self.x, self.y)
-
             y_pred = self.model.predict(self.x)
             cost = calculate_mse(self.y, y_pred)
             cost_history.append(cost)
@@ -160,11 +182,14 @@ class SimpleLinearRegressionSklearn(GroundUpMLBaseModel):
         self.beta_1_hat = self.model.coef_[0]
         self.beta_0_hat = self.model.intercept_[0]
 
-        self.diagnostics = {"cost_history": cost_history}
+        self.diagnostics = {
+            "cost_history": cost_history,
+            "training_kwargs": training_kwargs,
+        }
 
     def _fit_gradient_descent_stochastic(
         self,
-        n_epochs: int = 50,
+        training_kwargs: dict = None,
     ) -> None:
         """
         Fits the model using stochastic gradient descent.
@@ -174,23 +199,23 @@ class SimpleLinearRegressionSklearn(GroundUpMLBaseModel):
         randomly shuffled sample per step.
 
         Args:
-            n_epochs (int, optional): Number of iterations over the data.
-                Defaults to 50.
-
+            training_kwargs (dict): Hyperparameters for training loop
+                Defaults to None.
         """
+
+        training_kwargs = get_config(training_kwargs, DEFAULT_TRAINING_KWARGS_SKLEARN)
+
+        # Pull out values you use directly
+        max_epochs = training_kwargs.get("max_epochs", 50)
+
+        # Clean kwargs to only pass what SGDRegressor accepts
+        sgd_kwargs = safe_kwargs(SGDRegressor, training_kwargs)
+
+        self.model = SGDRegressor(**sgd_kwargs)
 
         cost_history = []
 
-        self.model = SGDRegressor(
-            loss="squared_error",
-            learning_rate="invscaling",
-            shuffle=False,
-            random_state=42,
-            tol=None,
-            warm_start=True,
-        )
-
-        for epoch in range(n_epochs):
+        for epoch in range(max_epochs):
             indices = np.random.permutation(len(self.x))
             for i in indices:
                 x_i = np.reshape(self.x[i], (1, -1))
@@ -205,10 +230,14 @@ class SimpleLinearRegressionSklearn(GroundUpMLBaseModel):
         self.beta_1_hat = self.model.coef_[0]
         self.beta_0_hat = self.model.intercept_[0]
 
-        self.diagnostics = {"cost_history": cost_history}
+        self.diagnostics = {
+            "cost_history": cost_history,
+            "training_kwargs": training_kwargs,
+        }
 
     def _fit_gradient_descent_mini_batch(
-        self, n_epochs: int = 50, batch_size: int = 32
+        self,
+        training_kwargs: dict = None,
     ) -> None:
         """
         Fits the model using mini-batch gradient descent.
@@ -218,23 +247,23 @@ class SimpleLinearRegressionSklearn(GroundUpMLBaseModel):
         randomly shuffled batch per step.
 
         Args:
-            n_epochs (int, optional): Number of iterations over the data.
-                Defaults to 50.
-
+            training_kwargs (dict): Hyperparameters for training loop
+                Defaults to None.
         """
+        training_kwargs = get_config(training_kwargs, DEFAULT_TRAINING_KWARGS_SKLEARN)
+
+        # Pull out values you use directly
+        max_epochs = training_kwargs.get("max_epochs", 50)
+        batch_size = training_kwargs.get("batch_size", 32)
+
+        # Clean kwargs to only pass what SGDRegressor accepts
+        sgd_kwargs = safe_kwargs(SGDRegressor, training_kwargs)
+
+        self.model = SGDRegressor(**sgd_kwargs)
 
         cost_history = []
 
-        self.model = SGDRegressor(
-            loss="squared_error",
-            learning_rate="invscaling",
-            shuffle=False,
-            random_state=42,
-            tol=None,
-            warm_start=True,
-        )
-
-        for epoch in range(n_epochs):
+        for epoch in range(max_epochs):
             indices = np.random.permutation(len(self.x))
             for i in range(0, len(self.x), batch_size):
                 batch_idx = indices[i : i + batch_size]
@@ -250,7 +279,10 @@ class SimpleLinearRegressionSklearn(GroundUpMLBaseModel):
         self.beta_1_hat = self.model.coef_[0]
         self.beta_0_hat = self.model.intercept_[0]
 
-        self.diagnostics = {"cost_history": cost_history}
+        self.diagnostics = {
+            "cost_history": cost_history,
+            "training_kwargs": training_kwargs,
+        }
 
     def predict(
         self, x_new: Optional[Union[pd.Series, np.ndarray]] = None
@@ -305,13 +337,23 @@ class SimpleLinearRegressionSklearn(GroundUpMLBaseModel):
         """
 
         coeff_results = []
-        methods = methods or SimpleLinearRegressionSklearn.ALL_METHODS
 
         for method in methods:
             model = SimpleLinearRegressionSklearn(x, y)
             try:
+                accepts_schedule = "gradient_descent" in method
                 start_time = time.perf_counter()
-                model.fit(method=method)
+
+                if accepts_schedule:
+                    model.fit(
+                        method=method,
+                        schedule="time_decay",
+                        schedule_kwargs={},
+                        training_kwargs={},
+                    )
+                else:
+                    model.fit(method=method)
+
                 duration = time.perf_counter() - start_time
                 formatted_time = format_duration(duration)
 
@@ -340,9 +382,12 @@ class SimpleLinearRegressionSklearn(GroundUpMLBaseModel):
                     {
                         "n_samples": n,
                         "method": method,
+                        "mse": model.mse,
                         "rmse": model.rmse,
                         "mae": model.mae,
+                        "median_ae": model.median_ae,
                         "r_squared": model.r_squared,
+                        "adjusted_r_squared": model.adjusted_r_squared,
                         "beta_0": model.beta_0_hat,
                         "beta_1": model.beta_1_hat,
                         "duration_seconds": duration,
@@ -371,6 +416,7 @@ class SimpleLinearRegressionSklearn(GroundUpMLBaseModel):
         """
 
         results = []
+        methods = methods or self.ALL_METHODS
 
         if data is not None and "x" in data and "y" in data:
             x = data["x"]
@@ -401,11 +447,18 @@ class SimpleLinearRegressionSklearn(GroundUpMLBaseModel):
         """
         Print a summary of the fitted model coefficients and metrics.
         """
-        print(f"Method: {self.method}")
+        print("\n[Model Summary]")
+        print(f"Method: {self.method}\n")
         print(f"Intercept (β₀): {self.beta_0_hat:.4f}")
-        print(f"Slope (β₁): {self.beta_1_hat:.4f}")
-        if self.r_squared is not None:
-            print(f"R²: {self.r_squared:.4f}")
+        print(f"Slope     (β₁): {self.beta_1_hat:.4f}\n")
+
+        print("[Metrics]")
+        print(f"MSE: {self.mse:.4f}")
+        print(f"RMSE: {self.rmse:.4f}")
+        print(f"MAE: {self.mae:.4f}")
+        print(f"Median AE: {self.median_ae:.4f}")
+        print(f"R²: {self.r_squared:.4f}")
+        print(f"Adjusted R²: {self.adjusted_r_squared:.4f}")
         print()
 
     def benchmark_summary(self) -> pd.DataFrame:

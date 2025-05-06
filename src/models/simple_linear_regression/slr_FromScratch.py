@@ -14,7 +14,10 @@ from typing import Optional
 import numpy as np
 import pandas as pd
 
-from src.config.defaults import DEFAULT_SCHEDULE_KWARGS, DEFAULT_TRAINING_KWARGS
+from src.config.defaults import (
+    DEFAULT_SCHEDULE_KWARGS,
+    DEFAULT_TRAINING_KWARGS_FROM_SCRATCH,
+)
 from src.core.metrics.metrics import (
     calculate_adjusted_r_squared,
     calculate_mae,
@@ -205,7 +208,9 @@ class SimpleLinearRegressionFromScratch(GroundUpMLBaseModel):
         schedule = get_learning_rate_schedule(schedule_name, **schedule_kwargs)
 
         # Set hyperparameters
-        training_kwargs = get_config(training_kwargs, DEFAULT_TRAINING_KWARGS)
+        training_kwargs = get_config(
+            training_kwargs, DEFAULT_TRAINING_KWARGS_FROM_SCRATCH
+        )
         max_epochs = training_kwargs["max_epochs"]
         convergence_tol = training_kwargs["convergence_tol"]
         theta_init_scale = training_kwargs["theta_init_scale"]
@@ -292,7 +297,9 @@ class SimpleLinearRegressionFromScratch(GroundUpMLBaseModel):
         schedule = get_learning_rate_schedule(schedule_name, **schedule_kwargs)
 
         # Set hyperparameters
-        training_kwargs = get_config(training_kwargs, DEFAULT_TRAINING_KWARGS)
+        training_kwargs = get_config(
+            training_kwargs, DEFAULT_TRAINING_KWARGS_FROM_SCRATCH
+        )
         max_epochs = training_kwargs["max_epochs"]
         convergence_tol = training_kwargs["convergence_tol"]
         theta_init_scale = training_kwargs["theta_init_scale"]
@@ -388,7 +395,9 @@ class SimpleLinearRegressionFromScratch(GroundUpMLBaseModel):
         schedule = get_learning_rate_schedule(schedule_name, **schedule_kwargs)
 
         # Set hyperparameters
-        training_kwargs = get_config(training_kwargs, DEFAULT_TRAINING_KWARGS)
+        training_kwargs = get_config(
+            training_kwargs, DEFAULT_TRAINING_KWARGS_FROM_SCRATCH
+        )
         max_epochs = training_kwargs["max_epochs"]
         batch_size = training_kwargs["batch_size"]
         convergence_tol = training_kwargs["convergence_tol"]
