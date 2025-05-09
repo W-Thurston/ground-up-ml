@@ -32,7 +32,14 @@ from src.utils.config import get_config, safe_kwargs
 from src.utils.utils import format_duration
 
 
-@register_model("slr_sklearn", task_type="regression", group="simple_linear")
+@register_model(
+    name="SK:LinReg-Uni",
+    learning_type="supervised",
+    task_type="regression",
+    data_shape="univariate",
+    implementation="sklearn",
+    model_type="linear regression",
+)
 class SimpleLinearRegressionSklearn(GroundUpMLBaseModel):
     """
     A wrapper around sklearn's SGDRegressor that mimics the interface of

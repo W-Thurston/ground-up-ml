@@ -35,7 +35,14 @@ from src.utils.utils import format_duration
 torch.set_default_dtype(torch.float64)
 
 
-@register_model("slr_pytorch", task_type="regression", group="simple_linear")
+@register_model(
+    name="PT:LinReg-Uni",
+    learning_type="supervised",
+    task_type="regression",
+    data_shape="univariate",
+    implementation="pytorch",
+    model_type="linear regression",
+)
 class SimpleLinearRegressionPyTorch(GroundUpMLBaseModel):
     """
     A PyTorch implementation of Simple Linear Regression.

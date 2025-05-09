@@ -1,73 +1,135 @@
 # src/core/registry.py
 
-from typing import Callable, Dict
+from typing import Callable, Dict, List, Optional
 
 # --- Model Registry ---
 MODEL_REGISTRY: Dict[str, Dict] = {}
 
 
 def register_model(
-    name: str, task_type: str = "regression", group: str = None
+    name: str = None,
+    learning_type: str = None,
+    task_type: str = None,
+    data_shape: str = None,
+    model_type: str = None,
+    implementation: str = None,
+    method: str = None,
 ) -> Callable[[Callable], Callable]:
     """
-    Decorator to register a model class under a given name.
+    Decorator for registering ML models into the global MODEL_REGISTRY.
+    Enables CLI and programmatic filtering based on model traits.
 
     Args:
-        name (str): Model registry key.
+        learning_type (str, optional):
+            Type of learning paradigm, e.g.,
+                "supervised" or "unsupervised".
+        task_type (str, optional):
+            High-level ML task, e.g.,
+                "regression", "classification".
+        data_shape (str, optional):
+            Data dimensionality, e.g.,
+                "univariate" or "multivariate".
+        model_type (str, optional):
+            Specific family or type of model, e.g.,
+                "simple_linear", "ridge", "logistic".
+        implementation (str, optional):
+            Source of the implementation, e.g.,
+                "from_scratch", "sklearn", "pytorch".
+        method (str, optional):
+            Optimization or estimation method, e.g.,
+                "normal_equation", "gradient_descent_batch".
 
     Returns:
         Callable: The original class unchanged.
     """
 
     def decorator(cls: Callable) -> Callable:
-        MODEL_REGISTRY[name] = {"class": cls, "task_type": task_type, "group": group}
+        key = name or cls.__name__
+        MODEL_REGISTRY[key] = {
+            "class": cls,
+            "learning_type": learning_type,
+            "task_type": task_type,
+            "data_shape": data_shape,
+            "model_type": model_type,
+            "implementation": implementation,
+            "method": method,
+        }
         return cls
 
     return decorator
 
 
-def list_registered_models(task_type: str = None, return_full: bool = False):
+def filter_models(
+    learning_type: Optional[str] = None,
+    task_type: Optional[str] = None,
+    data_shape: Optional[str] = None,
+    model_type: Optional[str] = None,
+    implementation: Optional[str] = None,
+    method: Optional[str] = None,
+) -> List[str]:
     """
-    List registered model names or full metadata.
+    Return a list of registered model names that match the specified filters.
+
+    This function enables dynamic querying of models based on their metadata
+    attributes registered via the `@register_model` decorator. It supports partial
+    filtering: any argument can be omitted (None) to include all values for that trait.
 
     Args:
-        task_type (str, optional): Filter by 'regression' or 'classification'.
-        return_full (bool, optional): If True, return full metadata dicts.
+        learning_type (str, optional):
+            Type of learning paradigm, e.g.,
+                "supervised" or "unsupervised".
+        task_type (str, optional):
+            High-level ML task, e.g.,
+                "regression", "classification".
+        data_shape (str, optional):
+            Data dimensionality, e.g.,
+                "univariate" or "multivariate".
+        model_type (str, optional):
+            Specific family or type of model, e.g.,
+                "simple_linear", "ridge", "logistic".
+        implementation (str, optional):
+            Source of the implementation, e.g.,
+                "from_scratch", "sklearn", "pytorch".
+        method (str, optional):
+            Optimization or estimation method, e.g.,
+                "normal_equation", "gradient_descent_batch".
 
     Returns:
-        list: List of model names (default) or list of (name, metadata) tuples.
+        List[str]: A list of model names (strings) that match all provided filters.
+
+    Example:
+        >>> filter_models(task_type="regression", data_shape="univariate")
+        ['SimpleLinearRegressionFromScratch', 'SimpleLinearRegressionSklearn']
+
+    Notes:
+        - Matching is case-sensitive.
+        - Filters are combined using logical AND: only models matching *all* specified
+          criteria will be returned.
+        - If no filters are specified, all registered model names will be returned.
     """
-    if return_full:
-        if task_type:
-            return [
-                (name, meta)
-                for name, meta in MODEL_REGISTRY.items()
-                if meta["task_type"] == task_type
-            ]
-        return list(MODEL_REGISTRY.items())
+    filters = {
+        "learning_type": learning_type,
+        "task_type": task_type,
+        "data_shape": data_shape,
+        "model_type": model_type,
+        "implementation": implementation,
+        "method": method,
+    }
 
-    else:
-        if task_type:
-            return [
-                name
-                for name, meta in MODEL_REGISTRY.items()
-                if meta["task_type"] == task_type
-            ]
-        return list(MODEL_REGISTRY.keys())
-
-
-def list_model_groups(task_type: str = None) -> list[str]:
-    """List all model groups, optionally filtered by task_type."""
-    groups = set()
-    for meta in MODEL_REGISTRY.values():
-        if task_type is None or meta["task_type"] == task_type:
-            if meta["group"]:
-                groups.add(meta["group"])
-    return sorted(groups)
-
-
-def get_models_by_group(group_name: str) -> list[str]:
-    """Return list of model keys in the specified group."""
-    return [
-        name for name, meta in MODEL_REGISTRY.items() if meta.get("group") == group_name
+    matching_models = [
+        name
+        for name, attrs in MODEL_REGISTRY.items()
+        if all(filters[k] is None or attrs.get(k) == filters[k] for k in filters)
     ]
+
+    return matching_models
+
+
+def list_models_for_cli(**kwargs):
+    """
+    Alias filter_models() for CLI use
+    """
+    matches = filter_models(**kwargs)
+    print(f"Found {len(matches)} model(s):")
+    for name in matches:
+        print(f" - {name}")

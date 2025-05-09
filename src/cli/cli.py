@@ -2,26 +2,34 @@
 
 import argparse
 
-import pandas as pd
-
 from src.core.dispatcher import run_benchmarks
-from src.data.generate_data import generate_singlevariate_synthetic_data_regression
+from src.core.registry import MODEL_REGISTRY
+from src.data.generate_data import (
+    generate_multivariate_synthetic_data_regression,
+    generate_singlevariate_synthetic_data_regression,
+)
 from src.utils.report import generate_report
 from src.visualizations.visualizations import plot_comparison_grid
 
 
-def load_dataset(data_path: str = None):
+def load_dataset(
+    data_path: str = None,
+    data_shape: str = None,
+):
     """Load user dataset or generate synthetic."""
     if data_path:
+        import pandas as pd
+
         df = pd.read_csv(data_path)
         X = df["x"]
         y = df["y"]
+
     else:
         # Generate synthetic if no file provided
-        import numpy as np
-
-        np.random.seed(42)
-        X, y = generate_singlevariate_synthetic_data_regression(n=1000)
+        if data_shape == "univariate":
+            X, y = generate_singlevariate_synthetic_data_regression(n=1000)
+        elif data_shape == "multivariate":
+            X, y = generate_multivariate_synthetic_data_regression(n=1000)
 
     return X, y
 
@@ -33,7 +41,9 @@ def run_experiment(settings: dict):
     Args:
         settings (dict): _description_
     """
-    X, y = load_dataset(settings.get("data_path"))
+    X, y = load_dataset(
+        data_path=settings.get("data_path"), data_shape=settings.get("data_shape")
+    )
 
     if settings.get("mode") == "benchmark_only":
         pairs = [
@@ -49,18 +59,18 @@ def run_experiment(settings: dict):
 
     benchmark_results = []
     for (model_name, method_name), model in trained_models.items():
+        model_meta = MODEL_REGISTRY.get(model_name, {})
         benchmark_results.append(
             {
                 "model_name": model_name,
-                "method_name": method_name,
+                "implementation": model_meta.get("implementation", "unknown").title(),
+                "method_name": method_name.replace("_", " ").title(),
                 "mse": model.mse,
                 "rmse": model.rmse,
                 "mae": model.mae,
                 "median_ae": model.median_ae,
                 "r_squared": model.r_squared,
                 "adjusted_r_squared": model.adjusted_r_squared,
-                "beta_0": getattr(model, "beta_0_hat", None),
-                "beta_1": getattr(model, "beta_1_hat", None),
                 "training_time_sec": model.duration_seconds,
             }
         )

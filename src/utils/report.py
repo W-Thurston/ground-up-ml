@@ -10,8 +10,7 @@ def generate_report(results: list[dict], output_format: str = "console") -> None
     Generate benchmark results report.
 
     Args:
-        results (list of dicts): Each dict must have keys:
-            'model_name', 'method_name', 'rmse', 'mae', 'r_squared', 'beta_0', 'beta_1'
+        results (list of dicts): Each dict must have keys
         output_format (str): 'console' (default), 'json' (TODO), or 'markdown' (TODO)
     """
     if output_format == "console":
@@ -33,12 +32,11 @@ def console_report(results: list[dict]) -> None:
     """
     headers = [
         "Model",
+        "Implementation",
         "Method",
-        "Beta₀",
-        "Beta₁",
+        "MSE",
         "RMSE",
         "MAE",
-        "MSE",
         "Median AE",
         "R²",
         "Adjusted R²",
@@ -49,20 +47,11 @@ def console_report(results: list[dict]) -> None:
         table.append(
             [
                 res.get("model_name", ""),
+                res.get("implementation", ""),
                 res.get("method_name", ""),
-                (
-                    f"{res.get('beta_0', float('nan')):.4f}"
-                    if res.get("beta_0") is not None
-                    else "N/A"
-                ),
-                (
-                    f"{res.get('beta_1', float('nan')):.4f}"
-                    if res.get("beta_1") is not None
-                    else "N/A"
-                ),
+                f"{res.get('mse', float('nan')):.4f}",
                 f"{res.get('rmse', float('nan')):.4f}",
                 f"{res.get('mae', float('nan')):.4f}",
-                f"{res.get('mse', float('nan')):.4f}",
                 f"{res.get('median_ae', float('nan')):.4f}",
                 f"{res.get('r_squared', float('nan')):.4f}",
                 f"{res.get('adjusted_r_squared', float('nan')):.4f}",
@@ -77,8 +66,7 @@ def console_report(results: list[dict]) -> None:
             colalign=(
                 "left",
                 "left",
-                "right",
-                "right",
+                "left",
                 "right",
                 "right",
                 "right",
