@@ -44,8 +44,6 @@ def run_benchmarks(pairs: list[tuple[str, str]], X: pd.Series, y: pd.Series) -> 
             ModelClass = MODEL_REGISTRY[model_name]["class"]
             model = ModelClass(X, y)
 
-            if method_name not in getattr(model, "ALL_METHODS", []):
-                continue
             pbar.set_description(f"Training {model_name}:{method_name}")
 
             # Detect if the model uses gradient descent
