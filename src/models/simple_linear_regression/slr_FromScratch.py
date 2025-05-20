@@ -91,8 +91,8 @@ class SimpleLinearRegressionFromScratch(GroundUpMLBaseModel):
         self,
         method: str = None,
         schedule: str = None,
-        schedule_kwargs: dict = None,
-        training_kwargs: dict = None,
+        schedule_kwargs: dict = {},
+        training_kwargs: dict = {},
     ) -> None:
         """
         Routing function to call specific coefficient estimator methods
@@ -107,9 +107,6 @@ class SimpleLinearRegressionFromScratch(GroundUpMLBaseModel):
             ValueError: Raise error if value in 'method' is not a known one.
         """
         self.method = method
-        schedule_kwargs = schedule_kwargs or {}
-        training_kwargs = training_kwargs or {}
-
         FIT_METHODS = {
             "beta_estimations": (self._fit_beta_estimations, False),
             "normal_equation": (self._fit_normal_equation, False),
@@ -324,11 +321,11 @@ class SimpleLinearRegressionFromScratch(GroundUpMLBaseModel):
             indices = np.random.permutation(m)
             for i in indices:
                 # Pull out our single observation to update gradients
-                xi = X_b[i : i + 1]
-                yi = y[i : i + 1]
+                x_i = X_b[i : i + 1]
+                y_i = y[i : i + 1]
 
                 # Update gradients
-                gradients = 2 * xi.T @ ((xi @ theta_hat) - yi)
+                gradients = 2 * x_i.T @ ((x_i @ theta_hat) - y_i)
 
                 # Learning rate decay
                 eta = schedule(t)

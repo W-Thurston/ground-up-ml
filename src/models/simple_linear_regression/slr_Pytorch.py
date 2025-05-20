@@ -99,8 +99,8 @@ class SimpleLinearRegressionPyTorch(GroundUpMLBaseModel):
         self,
         method: str = None,
         schedule: str = None,
-        schedule_kwargs: dict = None,
-        training_kwargs: dict = None,
+        schedule_kwargs: dict = {},
+        training_kwargs: dict = {},
     ) -> None:
         """
         Routing function to call specific coefficient estimator methods
@@ -112,8 +112,6 @@ class SimpleLinearRegressionPyTorch(GroundUpMLBaseModel):
             ValueError: If the method is not a known option.
         """
         self.method = method
-        schedule_kwargs = schedule_kwargs or {}
-        training_kwargs = training_kwargs or {}
 
         FIT_METHODS = {
             "beta_estimations": (self._fit_beta_estimations, False),
@@ -350,12 +348,12 @@ class SimpleLinearRegressionPyTorch(GroundUpMLBaseModel):
 
             for i in range(0, m, batch_size):
 
-                x = x_shuffled[i : i + batch_size]
-                y = y_shuffled[i : i + batch_size]
+                x_mini = x_shuffled[i : i + batch_size]
+                y_mini = y_shuffled[i : i + batch_size]
 
                 # 1. Forward pass
-                y_pred = self.model(x)  # 1a. Compute predictions
-                loss = self.loss_fn(y_pred, y)  # 1b. Calculate Loss
+                y_pred = self.model(x_mini)  # 1a. Compute predictions
+                loss = self.loss_fn(y_pred, y_mini)  # 1b. Calculate Loss
 
                 # 2. Backward pass
                 self.optimizer.zero_grad()  # 2a. Zero out any gradients

@@ -7,7 +7,10 @@ from tqdm import tqdm
 
 from src.config.defaults import DEFAULT_SCHEDULE_NAME
 from src.core.registry import MODEL_REGISTRY
-from src.models.multivariate_linear_regression import mlr_FromScratch  # noqa: F401;
+from src.models.multivariate_linear_regression import (  # noqa: F401;
+    mlr_FromScratch,
+    mlr_Sklearn,
+)
 
 # Import model files to trigger registration
 from src.models.simple_linear_regression import (  # noqa: F401

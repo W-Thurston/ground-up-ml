@@ -1,12 +1,10 @@
-# src/models/simple_linear_regression/slr_Sklearn.py
+# src/models/mulivariatve_linear_regression/mlr_Sklearn.py
 """
-Implements Simple Linear Regression using Scikit-learn's interface.
+Implements Multivariate Linear Regression using Scikit-learn's interface.
 
 Supports:
-- normal_equation
+- normal_equation (matrix inverse)
 - batch, stochastic, mini-batch gradient descent
-
-Designed to mirror the from-scratch interface for comparison
 """
 
 import time
@@ -26,28 +24,28 @@ from src.core.metrics.metrics import (
     calculate_rmse,
 )
 from src.core.registry import register_model
-from src.data.generate_data import generate_singlevariate_synthetic_data_regression
+from src.data.generate_data import generate_multivariate_synthetic_data_regression
 from src.models.ground_up_ml_base_model import GroundUpMLBaseModel
 from src.utils.config import get_config, safe_kwargs
 from src.utils.utils import format_duration
 
 
 @register_model(
-    name="SK:LinReg-Uni",
+    name="SK:LinReg-Multi",
     learning_type="supervised",
     task_type="regression",
-    data_shape="univariate",
+    data_shape="multivariate",
     implementation="sklearn",
     model_type="linear regression",
 )
-class SimpleLinearRegressionSklearn(GroundUpMLBaseModel):
+class MultivariateLinearRegressionSklearn(GroundUpMLBaseModel):
     """
     A wrapper around sklearn's LinearRegression and SGDRegressor
-    that mimics the interface of SimpleLinearRegressionFromScratch
+    that mimics the interface of MultivariateLinearRegressionFromScratch
     for consistent visualization and benchmarking.
 
-    The interface of SimpleLinearRegressionSklearn matches
-    SimpleLinearRegressionFromScratch and SimpleLinearRegressionPyTorch.
+    The interface of MultivariateLinearRegressionSklearn matches
+    MultivariateLinearRegressionFromScratch and MultivariateLinearRegressionPyTorch.
     """
 
     ALL_METHODS = [
@@ -57,15 +55,18 @@ class SimpleLinearRegressionSklearn(GroundUpMLBaseModel):
         "gradient_descent_mini_batch",
     ]
 
-    def __init__(self, x: pd.Series, y: pd.Series):
+    def __init__(self, X: pd.DataFrame, y: pd.Series):
         """
         Initialize the model with feature and target data.
 
         Args:
-            x (pd.Series): Feature values.
+            X (pd.DataFrame): Feature values.
             y (pd.Series): Target values.
         """
-        self.x: np.ndarray = x.values.reshape(-1, 1)
+        # Store original feature names
+        self.feature_names = ["Intercept"] + list(X.columns)
+
+        self.X: np.ndarray = X.to_numpy()
         self.y: np.ndarray = y.to_numpy()
 
         # Method to calculate coefficient estimations
@@ -74,8 +75,7 @@ class SimpleLinearRegressionSklearn(GroundUpMLBaseModel):
         self.model: Optional[Union[LinearRegression, SGDRegressor]] = None
 
         # Coefficient Estimations
-        self.beta_0_hat: Optional[float] = None
-        self.beta_1_hat: Optional[float] = None
+        self.theta_hat: Optional[float] = None
 
         # Performance metrics
         self.mse: Optional[float] = None
@@ -87,11 +87,11 @@ class SimpleLinearRegressionSklearn(GroundUpMLBaseModel):
 
         self.duration_seconds: float = 0.0
 
-        self.diagnostics: dict = {}
+        self.diagnostics = {}
 
     @property
     def name(self):
-        return "SimpleLinearRegression-Sklearn"
+        return "MultivariateLinearRegression-Sklearn"
 
     def fit(
         self,
@@ -104,8 +104,10 @@ class SimpleLinearRegressionSklearn(GroundUpMLBaseModel):
         Routing function to call specific coefficient estimator methods
 
         Args:
-            method (str, optional): Method to calculate coefficients.
-                Defaults to None.
+            method (str): Method to calculate coefficients.
+            schedule (str, optional): Learning rate schedule name.
+            schedule_kwargs (dict, optional): Schedule hyperparameters.
+            training_kwargs (dict, optional): Training loop hyperparameters.
 
         Raises:
             ValueError: Raise error if value in 'method' is not a known one.
@@ -128,7 +130,7 @@ class SimpleLinearRegressionSklearn(GroundUpMLBaseModel):
         # Raise error if value in 'method' is not a known one
         if method not in FIT_METHODS:
             raise ValueError(
-                f"Unknown method '{method}' for SimpleLinearRegressionSklearn."
+                f"Unknown method '{method}' for MultivariateLinearRegressionSklearn"
                 f"Choose one of: {list(FIT_METHODS.keys())}"
             )
 
@@ -141,26 +143,30 @@ class SimpleLinearRegressionSklearn(GroundUpMLBaseModel):
         else:
             fit_method()
 
-    def _fit_normal_equation(self) -> None:
+    def _fit_normal_equation(self):
         """
-        Fits the model using the Normal Equation
+        Fits the model using the Normal Equation:
+            Theta_hat = ((X.T ⋅ X)^-1) ⋅ X.T ⋅ y
         """
-        self.model = LinearRegression().fit(self.x, self.y)
+        self.model = LinearRegression().fit(self.X, self.y)
 
-        self.beta_1_hat = self.model.coef_[0]
-        self.beta_0_hat = self.model.intercept_
+        intercept = np.atleast_1d(self.model.intercept_).ravel()
+        coef = self.model.coef_.ravel()
+
+        # Handle shape consistency (reshape to column vector)
+        self.theta_hat = np.concatenate([intercept, coef]).reshape(-1, 1)
 
         self.diagnostics = {}  # No dynamics for closed-form method
 
     def _fit_gradient_descent_batch(
         self,
-        training_kwargs: dict = None,
+        training_kwargs=None,
     ) -> None:
         """
         Fits the model using batch gradient descent.
-        sklearn.SGDRegressor
+        Minimizes the MSE cost function by iteratively updating θ (theta).
 
-        Parameters are updated after each epoch.
+        Gradient: ∂J(θ)/∂θ = (2/m) ⋅ Xᵀ(Xθ - y)
 
         Args:
             training_kwargs (dict): Hyperparameters for training loop
@@ -179,14 +185,17 @@ class SimpleLinearRegressionSklearn(GroundUpMLBaseModel):
         cost_history = []
 
         for epoch in range(max_epochs):
-            self.model.partial_fit(self.x, self.y)
-            y_pred = self.model.predict(self.x)
+            self.model.partial_fit(self.X, self.y)
+            y_pred = self.model.predict(self.X)
             cost = calculate_mse(self.y, y_pred)
             cost_history.append(cost)
 
         # Unpack final parameters
-        self.beta_1_hat = self.model.coef_[0]
-        self.beta_0_hat = self.model.intercept_[0]
+        intercept = np.atleast_1d(self.model.intercept_).ravel()
+        coef = self.model.coef_.ravel()
+
+        # Handle shape consistency (reshape to column vector)
+        self.theta_hat = np.concatenate([intercept, coef]).reshape(-1, 1)
 
         self.diagnostics = {
             "cost_history": cost_history,
@@ -195,11 +204,11 @@ class SimpleLinearRegressionSklearn(GroundUpMLBaseModel):
 
     def _fit_gradient_descent_stochastic(
         self,
-        training_kwargs: dict = None,
+        training_kwargs=None,
     ) -> None:
         """
-        Fits the model using stochastic gradient descent.
-        sklearn.SGDRegressor
+        Fits the model using stochastic gradient descent (SGD) with a
+        decaying learning rate.
 
         Parameters are updated after each training example, using one
         randomly shuffled sample per step.
@@ -208,13 +217,13 @@ class SimpleLinearRegressionSklearn(GroundUpMLBaseModel):
             training_kwargs (dict): Hyperparameters for training loop
                 Defaults to None.
         """
-
         training_kwargs = get_config(training_kwargs, DEFAULT_TRAINING_KWARGS_SKLEARN)
 
-        # Pull out values you use directly
+        # pull out values you use directly
         max_epochs = training_kwargs.get("max_epochs", 50)
+        n = self.X.shape[0]
 
-        # Clean kwargs to only pass what SGDRegressor accepts
+        # Clean kwatgs to only pass what SGDRegressor accepts
         sgd_kwargs = safe_kwargs(SGDRegressor, training_kwargs)
 
         self.model = SGDRegressor(**sgd_kwargs)
@@ -222,19 +231,22 @@ class SimpleLinearRegressionSklearn(GroundUpMLBaseModel):
         cost_history = []
 
         for epoch in range(max_epochs):
-            indices = np.random.permutation(len(self.x))
+            indices = np.random.permutation(n)
             for i in indices:
-                x_i = np.reshape(self.x[i], (1, -1))
+                X_i = np.reshape(self.X[i], (1, -1))
                 y_i = [self.y[i]]
-                self.model.partial_fit(x_i, y_i)
+                self.model.partial_fit(X_i, y_i)
 
-            y_pred = self.model.predict(self.x)
+            y_pred = self.model.predict(self.X)
             cost = calculate_mse(self.y, y_pred)
             cost_history.append(cost)
 
         # Unpack final parameters
-        self.beta_1_hat = self.model.coef_[0]
-        self.beta_0_hat = self.model.intercept_[0]
+        intercept = np.atleast_1d(self.model.intercept_).ravel()
+        coef = self.model.coef_.ravel()
+
+        # Handle shape consistency (reshape to column vector)
+        self.theta_hat = np.concatenate([intercept, coef]).reshape(-1, 1)
 
         self.diagnostics = {
             "cost_history": cost_history,
@@ -243,14 +255,11 @@ class SimpleLinearRegressionSklearn(GroundUpMLBaseModel):
 
     def _fit_gradient_descent_mini_batch(
         self,
-        training_kwargs: dict = None,
+        training_kwargs=None,
     ) -> None:
         """
-        Fits the model using mini-batch gradient descent.
-        sklearn.SGDRegressor
-
-        Parameters are updated after each training batch, using a
-        randomly shuffled batch per step.
+        Fits the model using mini-batch gradient descent with a decaying learning rate.
+        Each epoch processes randomly shuffled mini-batches of the training data.
 
         Args:
             training_kwargs (dict): Hyperparameters for training loop
@@ -258,9 +267,10 @@ class SimpleLinearRegressionSklearn(GroundUpMLBaseModel):
         """
         training_kwargs = get_config(training_kwargs, DEFAULT_TRAINING_KWARGS_SKLEARN)
 
-        # Pull out values you use directly
+        # Pull out values you use dirrectly
         max_epochs = training_kwargs.get("max_epochs", 50)
-        batch_size = training_kwargs.get("batch_size", 32)
+        batch_size = training_kwargs.get("batch_size", 50)
+        n = self.X.shape[0]
 
         # Clean kwargs to only pass what SGDRegressor accepts
         sgd_kwargs = safe_kwargs(SGDRegressor, training_kwargs)
@@ -271,21 +281,24 @@ class SimpleLinearRegressionSklearn(GroundUpMLBaseModel):
 
         for epoch in range(max_epochs):
 
-            indices = np.random.permutation(len(self.x))
-            x_shuffled, y_shuffled = self.x[indices], self.y[indices]
+            indices = np.random.permutation(n)
+            X_shuffled, y_shuffled = self.X[indices], self.y[indices]
 
-            for i in range(0, len(self.x), batch_size):
-                x_mini = x_shuffled[i : i + batch_size]
+            for i in range(0, n, batch_size):
+                X_mini = X_shuffled[i : i + batch_size]
                 y_mini = y_shuffled[i : i + batch_size]
-                self.model.partial_fit(x_mini, y_mini)
+                self.model.partial_fit(X_mini, y_mini)
 
-            y_pred = self.model.predict(self.x)
+            y_pred = self.model.predict(self.X)
             cost = calculate_mse(self.y, y_pred)
             cost_history.append(cost)
 
         # Unpack final parameters
-        self.beta_1_hat = self.model.coef_[0]
-        self.beta_0_hat = self.model.intercept_[0]
+        intercept = np.atleast_1d(self.model.intercept_).ravel()
+        coef = self.model.coef_.ravel()
+
+        # Handle shape consistency (reshape to column vector)
+        self.theta_hat = np.concatenate([intercept, coef]).reshape(-1, 1)
 
         self.diagnostics = {
             "cost_history": cost_history,
@@ -293,7 +306,7 @@ class SimpleLinearRegressionSklearn(GroundUpMLBaseModel):
         }
 
     def predict(
-        self, x_new: Optional[Union[pd.Series, np.ndarray]] = None
+        self, x_new: Optional[Union[pd.DataFrame, np.ndarray]] = None
     ) -> np.ndarray:
         """
         Predict target values for new data.
@@ -305,7 +318,10 @@ class SimpleLinearRegressionSklearn(GroundUpMLBaseModel):
             np.ndarray: Predicted target values.
         """
         if x_new is None:
-            x_new = self.x
+            x_new = self.X
+        elif isinstance(x_new, pd.DataFrame):
+            x_new = x_new.to_numpy()
+
         return self.model.predict(x_new)
 
     def residuals(self) -> np.ndarray:
@@ -335,19 +351,24 @@ class SimpleLinearRegressionSklearn(GroundUpMLBaseModel):
         self.adjusted_r_squared = calculate_adjusted_r_squared(self.y, y_pred)
 
     def _coefficient_estimators(
-        self, x: pd.Series, y: pd.Series, n: int, methods: str = None
+        self, X: pd.DataFrame, y: pd.Series, n: int, methods: str = None
     ) -> list:
         """
         Run each coefficient estimation method on the current dataset.
 
+        Args:
+            x (pd.DataFrame): _description_
+            y (pd.Series): _description_
+            n (int): _description_
+            methods (str, optional): _description_. Defaults to None.
+
         Returns:
             list: A list of dictionaries containing model diagnostics per method.
         """
-
         coeff_results = []
 
         for method in methods:
-            model = SimpleLinearRegressionSklearn(x, y)
+            model = MultivariateLinearRegressionSklearn(X, y)
             try:
                 accepts_schedule = "gradient_descent" in method
                 start_time = time.perf_counter()
@@ -396,8 +417,6 @@ class SimpleLinearRegressionSklearn(GroundUpMLBaseModel):
                         "median_ae": model.median_ae,
                         "r_squared": model.r_squared,
                         "adjusted_r_squared": model.adjusted_r_squared,
-                        "beta_0": model.beta_0_hat,
-                        "beta_1": model.beta_1_hat,
                         "duration_seconds": duration,
                         "duration_pretty": formatted_time,
                     }
@@ -414,7 +433,7 @@ class SimpleLinearRegressionSklearn(GroundUpMLBaseModel):
         n_samples_list: list = [10, 100, 1000],
         noise: float = 1.0,
         seed: int = 42,
-        methods=None,
+        methods: list = None,
     ) -> pd.DataFrame:
         """
         Run all coefficient estimation methods on datasets of varying sample sizes.
@@ -427,21 +446,21 @@ class SimpleLinearRegressionSklearn(GroundUpMLBaseModel):
         methods = methods or self.ALL_METHODS
 
         if data is not None and "x" in data and "y" in data:
-            x = data["x"]
+            X = data.drop("y", axis=1)
             y = data["y"]
 
             results.extend(
-                self._coefficient_estimators(x, y, n=x.size, methods=methods)
+                self._coefficient_estimators(X, y, n=X.shape[0], methods=methods)
             )
 
         else:
             for n in n_samples_list:
                 # Generate synthetic data
-                x, y = generate_singlevariate_synthetic_data_regression(
+                X, y = generate_multivariate_synthetic_data_regression(
                     n=n, noise=noise, seed=seed
                 )
 
-                results.extend(self._coefficient_estimators(x, y, n, methods))
+                results.extend(self._coefficient_estimators(X, y, n, methods))
 
         df = pd.DataFrame(results)
         if not df.empty and all(
@@ -457,10 +476,17 @@ class SimpleLinearRegressionSklearn(GroundUpMLBaseModel):
         """
         print("\n[Model Summary]")
         print(f"Method: {self.method}\n")
-        print(f"Intercept (β₀): {self.beta_0_hat:.4f}")
-        print(f"Slope     (β₁): {self.beta_1_hat:.4f}\n")
 
-        print("[Metrics]")
+        try:
+            coefficients = self.theta_hat.ravel()
+            for name, val in zip(self.feature_names, coefficients):
+                print(f"{name}: {val:.4f}")
+        except Exception as e:
+            print("[!] Error printing coefficients — theta_hat shape mismatch?")
+            print(f"theta_hat: {self.theta_hat}")
+            raise e  # Re-raise so you still get traceback
+
+        print("\n[Metrics]")
         print(f"MSE: {self.mse:.4f}")
         print(f"RMSE: {self.rmse:.4f}")
         print(f"MAE: {self.mae:.4f}")

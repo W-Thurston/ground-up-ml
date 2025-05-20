@@ -3,7 +3,7 @@
 Implements Multivariate Linear Regression using from-scratch math and logic.
 
 Supports:
-- nomal_equations (matrix inverse)
+- nomal_equation (matrix inverse)
 - batch, stochastic, mini-batch gradient descent
 """
 
@@ -58,14 +58,20 @@ class MultivariateLinearRegressionFromScratch(GroundUpMLBaseModel):
         "gradient_descent_mini_batch",
     ]
 
-    def __init__(self, x: pd.DataFrame, y: pd.Series):
+    def __init__(self, X: pd.DataFrame, y: pd.Series):
+        """
+        Initialize the model with feature and target data.
 
+        Args:
+            X (pd.DataFrame): Feature values.
+            y (pd.Series): Target values.
+        """
         # Store original feature names
-        self.feature_names = ["Intercept"] + list(x.columns)
+        self.feature_names = ["Intercept"] + list(X.columns)
 
         # Store X with bias term baked in
-        m = x.shape[0]
-        self.X_b: np.ndarray = np.c_[np.ones((m, 1)), x.to_numpy()]
+        m = X.shape[0]
+        self.X_b: np.ndarray = np.c_[np.ones((m, 1)), X.to_numpy()]
         self.y: np.ndarray = y.to_numpy().reshape(-1, 1)
 
         # Method to calculate coefficient estimations
@@ -94,8 +100,8 @@ class MultivariateLinearRegressionFromScratch(GroundUpMLBaseModel):
         self,
         method: str = None,
         schedule: str = None,
-        schedule_kwargs: dict = None,
-        training_kwargs: dict = None,
+        schedule_kwargs: dict = {},
+        training_kwargs: dict = {},
     ) -> None:
         """
         Routing function to call specific coefficient estimator methods
@@ -110,8 +116,6 @@ class MultivariateLinearRegressionFromScratch(GroundUpMLBaseModel):
             ValueError: Raise error if value in 'method' is not a known one.
         """
         self.method = method
-        schedule_kwargs = schedule_kwargs or {}
-        training_kwargs = training_kwargs or {}
 
         FIT_METHODS = {
             "normal_equation": (self._fit_normal_equation, False),
@@ -129,7 +133,7 @@ class MultivariateLinearRegressionFromScratch(GroundUpMLBaseModel):
         # Raise error if value in 'method' is not a known one
         if method not in FIT_METHODS:
             raise ValueError(
-                f"Unkown method '{method}' for MultivariateLinearRegressionFromScratch"
+                f"Unknown method '{method}' for MultivariateLinearRegressionFromScratch"
                 f"Choose one of: {list(FIT_METHODS.keys())}"
             )
 
@@ -305,14 +309,14 @@ class MultivariateLinearRegressionFromScratch(GroundUpMLBaseModel):
             indices = np.random.permutation(m)
             for i in indices:
                 # Step 5b: Pull out our single observation to update gradients
-                xi = X_b[i : i + 1]
-                yi = y[i : i + 1]
+                X_i = X_b[i : i + 1]
+                y_i = y[i : i + 1]
 
                 # Step 5c: Learning rate decay
                 eta = schedule(t)
 
                 # Step 5d: Compute Gradients
-                gradients = 2 * xi.T @ (xi @ theta_hat - yi)
+                gradients = 2 * X_i.T @ (X_i @ theta_hat - y_i)
 
                 # Step 5e: How much to update theta_hat by
                 update = eta * gradients
